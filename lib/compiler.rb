@@ -1,6 +1,7 @@
 require 'jruby'
 require 'java'
 Char = java.lang.Character
+import org.jruby.ast.IfNode
 
 module FastRuby
   BUILTINS = %w[puts]
@@ -108,9 +109,9 @@ module FastRuby
       end
 
       def visitNewlineNode(node)
-        print "        __last = " if @in_def
+        print "        __last = " if store_last(node)
         node.next_node.accept(self)
-        print ";" if @in_def
+        print "; // #{node.position.start_line}" if store_last(node)
         puts
       end
 
@@ -120,7 +121,9 @@ module FastRuby
 
       def visitIfNode(node)
         print "if ("
+        @in_def = false
         node.condition.accept(self)
+        @in_def = true
         print ".toBoolean()) {\n"
         node.then_body.accept(self)
         if node.else_body
@@ -132,6 +135,10 @@ module FastRuby
 
       def visitLocalVarNode(node)
         print node.name
+      end
+
+      def store_last(node)
+        @in_def unless { IfNode => true }[node.next_node.class]
       end
 
       def safe_name(name)
