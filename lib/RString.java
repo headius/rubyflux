@@ -9,9 +9,20 @@ public class RString extends RObject implements CharSequence {
         return str;
     }
 
-    public ROBject _aref_(RObject index) {
+    //public RObject _aref_(RObject index) {
+    //
+    //}
 
+    public char charAt(int index) {
+        return str.charAt(index);
     }
 
-    public char ()
+    public int length() {
+        return str.length();
+    }
+
+    public CharSequence subSequence(int start, int end) {
+        return str.subSequence(start, end);
+    }
+
 }
