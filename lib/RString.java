@@ -8,10 +8,4 @@ public class RString extends RObject implements CharSequence {
     public String toString() {
         return str;
     }
-
-    public ROBject _aref_(RObject index) {
-
-    }
-
-    public char ()
 }
