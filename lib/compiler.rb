@@ -1,4 +1,6 @@
 require 'jruby'
+require 'java'
+Char = java.lang.Character
 
 module FastRuby
   BUILTINS = %w[puts]
@@ -133,18 +135,7 @@ module FastRuby
       end
 
       def safe_name(name)
-        case name
-          when "+"
-            "_plus_"
-          when "<"
-            "_lt_"
-          when "-"
-            "_minus_"
-          when "initialize"
-            @class_name
-          else
-            name
-        end
+        name.gsub(/[^a-zA-Z0-9_]/) { |s| "__#{Char.getName(s[0].to_i).gsub(/[^a-zA-Z0-9_]/, '_')}" }
       end
     end
   end
