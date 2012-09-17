@@ -8,4 +8,17 @@ public class RString extends RObject implements CharSequence {
     public String toString() {
         return str;
     }
+
+    public char charAt(int index) {
+        return str.charAt(index);
+    }
+
+    public int length() {
+        return str.length();
+    }
+
+    public CharSequence subSequence(int start, int end) {
+        return str.subSequence(start, end);
+    }
+
 }
