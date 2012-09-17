@@ -27,13 +27,17 @@ module FastRuby
         methods.each {|name, arity|
           next if BUILTINS.include? name
           args = arity > 0 ? (0..(arity - 1)).to_a.map {|i| "RObject arg#{i}"} : []
-          puts "    public RObject #{name}(#{args.join(", ")}) {"
+          puts "    public #{return_type(name)} #{name}(#{args.join(", ")}) {"
           puts "        throw new RuntimeException(\"#{name}\");"
           puts "    }"
         }
         puts "}"
         $stdout.reopen(old_stdout)
       end
+    end
+    
+    def return_type(name)
+      name == "initialize" ? "void" : "RObject"
     end
 
     class Visitor
@@ -90,8 +94,8 @@ module FastRuby
         @methods[safe_name(node.name)] = arity
         args = arity > 0 ? node.args_node.pre.child_nodes.to_a.map(&:name) : []
         args.map! {|a| "RObject #{a}"}
-        print "    public "
-        print "RObject " unless node.name == "initialize"
+        print "    public #{return_type(node.name)} "
+#        print node.name == "initialize" ? "void " : "RObject "
         puts "#{safe_name(node.name)}(#{args.join(", ")}) {"
         puts "        RObject __last = RNil;"
         node.body_node.accept(self) if node.body_node
@@ -139,6 +143,10 @@ module FastRuby
 
       def store_last(node)
         @in_def unless { IfNode => true }[node.next_node.class]
+      end
+
+      def return_type(name)
+        name == "initialize" ? "void" : "RObject"
       end
 
       def safe_name(name)
