@@ -7,14 +7,16 @@ module FastRuby
   BUILTINS = %w[puts]
 
   class Compiler
-    def initialize(files)
+    def initialize(files, dump_ast = false)
       @files = files
       @visitor = Visitor.new
+      @dump_ast = dump_ast
     end
 
     def compile
       @files.each do |file|
         ast = JRuby.parse(File.read(file))
+        puts ast if @dump_ast
         ast.accept(@visitor)
       end
 
@@ -157,5 +159,24 @@ module FastRuby
 end
 
 if __FILE__ == $0
-  FastRuby::Compiler.new(ARGV).compile
+  require 'getoptlong'
+  opts = GetoptLong.new(
+    ["--ast", "-a", GetoptLong::NO_ARGUMENT],
+    ["--help", "-h", GetoptLong::NO_ARGUMENT]
+  )
+  ast = false
+  
+  opts.each do |opt,arg|
+    case opt
+    when '--ast'
+      ast = true
+    when '--help'
+      puts "jruby compiler.rb [options] file...
+      --ast   dump the abstract syntax tree to stdout.
+      --help  display this help message and exit."
+      exit 0
+    end
+  end
+  
+  FastRuby::Compiler.new(ARGV, ast).compile unless ARGV.empty?
 end
