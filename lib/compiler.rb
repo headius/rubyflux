@@ -28,7 +28,7 @@ module FastRuby
           next if BUILTINS.include? name
           args = arity > 0 ? (0..(arity - 1)).to_a.map {|i| "RObject arg#{i}"} : []
           puts "    public #{return_type(name)} #{name}(#{args.join(", ")}) {"
-          puts "        throw new RuntimeException(\"#{name}\");" unless name == "initialize"
+          puts "        throw new UnsupportedOperationException(\"#{name}\");" unless name == "initialize"
           puts "    }"
         }
         puts "}"
