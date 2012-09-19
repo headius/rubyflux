@@ -1,6 +1,7 @@
 require 'jruby'
 require 'java'
 import java.lang.Character
+import org.jruby.ast.CallNode
 import org.jruby.ast.ClassNode
 import org.jruby.ast.DefnNode
 import org.jruby.ast.IfNode
@@ -83,16 +84,19 @@ module FastRuby
 
       def visitCallNode(node)
         @node_stack.push node
-        @methods[node.name] = node.args_node ? node.args_node.child_nodes.size : 0
         node.receiver_node.accept(self)
-        print ".#{safe_name(node.name)}("
-        first = true
-        node.args_node.child_nodes.each {|n| print ", " unless first; first = false; n.accept self}
-        print ")"
+        print "."
+        do_call_node(node)
         @node_stack.pop
       end
 
       def visitFCallNode(node)
+        @node_stack.push node
+        do_call_node(node)
+        @node_stack.pop
+      end
+
+      def do_call_node(node)
         @node_stack.push node
         @methods[node.name] = node.args_node ? node.args_node.child_nodes.size : 0
         print "#{safe_name(node.name)}("
