@@ -13,6 +13,37 @@ module FastRuby
     end
   end
 
+  def safe_name?(name)
+    safe_name(name) == name
+  end
+
+  class JavaWriter
+    def initialize(file, indent = 4)
+      @f = file
+      @indent = indent
+      @lpad = ""
+    end
+    def indent
+      @on_newline ? @lpad : ""
+    end
+    def <<(arg)
+      case arg
+      when /\{\s*$/
+        arg = indent + arg.rstrip + "\n"; @on_newline = true
+        @lpad = " ".*(@lpad.length + @indent)
+      when /\}\s*$/
+        @lpad = " ".*(@lpad.length - @indent);
+        arg = indent + arg.strip + "\n"; @on_newline = true
+      when /\;\s*$/
+        arg = indent + arg.rstrip + "\n"; @on_newline = true
+      else
+        arg = indent + arg; @on_newline = false
+      end
+      @f << arg
+      self
+    end
+  end
+
   class Compiler
     include FastRuby
     def initialize(files, dump_ast = false)
@@ -31,24 +62,22 @@ module FastRuby
       methods = @visitor.methods
 
       File.open("RObject.java", 'w') do |f|
-        old_stdout = $stdout.dup
-        $stdout.reopen(f)
-        puts "public class RObject extends RKernel {"
-        methods.each {|name, arity|
+        w = JavaWriter.new f
+        w << "public class RObject extends RKernel {"
+        methods.each do |name, arity|
           next if BUILTINS.include? name
-          args = arity > 0 ? (0..(arity - 1)).to_a.map {|i| "RObject arg#{i}"}.join(", ") : ""
-          puts "    public RObject #{safe_name(name)}(#{args}) {"
-          puts "        throw new UnsupportedOperationException(\"#{name} (a.k.a. #{safe_name(name)})\");"
-          puts "    }"
-        }
-        puts "}"
-        $stdout.reopen(old_stdout)
+          args = arity > 0 ? (0..(arity - 1)).to_a.map {|i| "RObject arg#{i}"}.join(', ') : ''
+          w << "public RObject #{safe_name(name)}(#{args}) {"
+          w << 'throw new UnsupportedOperationException("' << name << (safe_name?(name) ? " (#{safe_name(name)})" : '') << '");'
+          w << '}'
+        end
+        w << '}'
       end
     end
     
     class Visitor
       include FastRuby, org.jruby.ast.visitor.NodeVisitor
-      import "org.jruby.ast"
+      import 'org.jruby.ast'
 
       def initialize
         @methods = {} # ruby name -> arity
