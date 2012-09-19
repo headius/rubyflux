@@ -40,7 +40,7 @@ module FastRuby
         methods.each {|name, arity|
           next if BUILTINS.include? name
           args = arity > 0 ? (0..(arity - 1)).to_a.map {|i| "RObject arg#{i}"}.join(", ") : ""
-          puts "    public #{return_type(name)} #{safe_name(name)}(#{args}) {"
+          puts "    public RObject #{safe_name(name)}(#{args}) {"
           puts "        throw new UnsupportedOperationException(\"#{name} (a.k.a. #{safe_name(name)})\");"
           puts "    }"
         }
@@ -49,10 +49,6 @@ module FastRuby
       end
     end
     
-    def return_type(name)
-      name == "initialize" ? "void" : "RObject"
-    end
-
     class Visitor
       include FastRuby, org.jruby.ast.visitor.NodeVisitor
 
@@ -122,7 +118,7 @@ module FastRuby
           node.body_node.accept(self) if node.body_node
         elsif
           @methods[node.name] = arity
-          puts "    public #{return_type(node.name)} #{safe_name(node.name)}(#{args}) {"
+          puts "    public RObject #{safe_name(node.name)}(#{args}) {"
           puts "        RObject __last = RNil;"
           node.body_node.accept(self) if node.body_node
           puts "        return __last;"
@@ -195,10 +191,6 @@ module FastRuby
 
       def statement?(node)
         @stmt_stack.last and [IfNode].none? { |c| node.is_a? c }
-      end
-
-      def return_type(name)
-        name == "initialize" ? "void" : "RObject"
       end
     end
   end
