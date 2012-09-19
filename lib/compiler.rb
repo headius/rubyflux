@@ -1,12 +1,8 @@
 require 'jruby'
 require 'java'
-import java.lang.Character
-import org.jruby.ast.CallNode
-import org.jruby.ast.ClassNode
-import org.jruby.ast.DefnNode
-import org.jruby.ast.IfNode
 
 module FastRuby
+  import java.lang.Character
   BUILTINS = %w[puts]
 
   @@safe_names = {} # ruby name -> java/safe name
@@ -52,6 +48,7 @@ module FastRuby
     
     class Visitor
       include FastRuby, org.jruby.ast.visitor.NodeVisitor
+      import "org.jruby.ast"
 
       def initialize
         @methods = {} # ruby name -> arity
