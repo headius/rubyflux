@@ -8,7 +8,16 @@ import org.jruby.ast.IfNode
 module FastRuby
   BUILTINS = %w[puts]
 
+  @@safe_names = {} # ruby name -> java/safe name
+
+  def safe_name(name)
+    @@safe_names[name] || @@safe_names[name] = name.gsub(/[^a-zA-Z0-9_]/) do |s|
+      "__#{Character.getName(s[0].to_i).gsub(/[^a-zA-Z0-9_]/, '_').downcase!}"
+    end
+  end
+
   class Compiler
+    include FastRuby
     def initialize(files, dump_ast = false)
       @files = files
       @visitor = Visitor.new
@@ -30,9 +39,9 @@ module FastRuby
         puts "public class RObject extends RKernel {"
         methods.each {|name, arity|
           next if BUILTINS.include? name
-          args = arity > 0 ? (0..(arity - 1)).to_a.map {|i| "RObject arg#{i}"} : []
-          puts "    public #{return_type(name)} #{name}(#{args.join(", ")}) {"
-          puts "        throw new UnsupportedOperationException(\"#{name}\");" unless name == "initialize"
+          args = arity > 0 ? (0..(arity - 1)).to_a.map {|i| "RObject arg#{i}"}.join(", ") : ""
+          puts "    public #{return_type(name)} #{safe_name(name)}(#{args}) {"
+          puts "        throw new UnsupportedOperationException(\"#{name} (a.k.a. #{safe_name(name)})\");"
           puts "    }"
         }
         puts "}"
@@ -45,12 +54,11 @@ module FastRuby
     end
 
     class Visitor
-      include org.jruby.ast.visitor.NodeVisitor
+      include FastRuby, org.jruby.ast.visitor.NodeVisitor
 
       def initialize
-        @methods = {}
-        @fields  = []
-        @classes = []
+        @methods = {} # ruby name -> arity
+        @fields  = [] # ruby_name
         @node_stack = []
         @stmt_stack = [true] # assume true unless suppressed
       end
@@ -79,7 +87,7 @@ module FastRuby
 
       def visitCallNode(node)
         @node_stack.push node
-        @methods[safe_name(node.name)] = node.args_node ? node.args_node.child_nodes.size : 0
+        @methods[node.name] = node.args_node ? node.args_node.child_nodes.size : 0
         node.receiver_node.accept(self)
         print ".#{safe_name(node.name)}("
         first = true
@@ -90,7 +98,7 @@ module FastRuby
 
       def visitFCallNode(node)
         @node_stack.push node
-        @methods[safe_name(node.name)] = node.args_node ? node.args_node.child_nodes.size : 0
+        @methods[node.name] = node.args_node ? node.args_node.child_nodes.size : 0
         print "#{safe_name(node.name)}("
         first = true
         node.args_node.child_nodes.each {|n| print ", " unless first; first = false; n.accept self}
@@ -100,7 +108,7 @@ module FastRuby
 
       def visitVCallNode(node)
         @node_stack.push node
-        @methods[safe_name(node.name)] = 0
+        @methods[node.name] = 0
         print "#{safe_name(node.name)}();"
         @node_stack.pop
       end
@@ -113,7 +121,7 @@ module FastRuby
           puts "    public #{safe_name(current_class.cpath.name)}(#{args}) {"
           node.body_node.accept(self) if node.body_node
         elsif
-          @methods[safe_name(node.name)] = arity
+          @methods[node.name] = arity
           puts "    public #{return_type(node.name)} #{safe_name(node.name)}(#{args}) {"
           puts "        RObject __last = RNil;"
           node.body_node.accept(self) if node.body_node
@@ -191,10 +199,6 @@ module FastRuby
 
       def return_type(name)
         name == "initialize" ? "void" : "RObject"
-      end
-
-      def safe_name(name)
-        name.gsub(/[^a-zA-Z0-9_]/) { |s| "__#{Character.getName(s[0].to_i).gsub(/[^a-zA-Z0-9_]/, '_').downcase!}" }
       end
     end
   end

@@ -5,7 +5,7 @@ class Inits
     #@files = []
   end
 
-  def list_files
+  def list_files!
     puts "TODO: Implement list_files!"
   end
 end
