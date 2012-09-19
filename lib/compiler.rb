@@ -1,6 +1,8 @@
 require 'jruby'
 require 'java'
-Char = java.lang.Character
+import java.lang.Character
+import org.jruby.ast.ClassNode
+import org.jruby.ast.DefnNode
 import org.jruby.ast.IfNode
 
 module FastRuby
@@ -47,7 +49,10 @@ module FastRuby
 
       def initialize
         @methods = {}
+        @fields  = []
         @classes = []
+        @node_stack = []
+        @stmt_stack = [true] # assume true unless suppressed
       end
 
       attr_accessor :methods
@@ -57,53 +62,65 @@ module FastRuby
       end
 
       def visitClassNode(node)
+        @node_stack.push node
         @class_name = node.cpath.name
         File.open("#{@class_name}.java", 'w') do |f|
           old_stdout = $stdout.dup
           $stdout.reopen(f)
           puts "public class #{@class_name} extends RObject {"
           node.child_nodes.each {|n| n.accept self}
+          puts
+          @fields.uniq.sort!.each { |f| puts "    private RObject #{safe_name(f)};" }
           puts "}"
           $stdout.reopen(old_stdout)
         end
+        @node_stack.pop
       end
 
       def visitCallNode(node)
+        @node_stack.push node
         @methods[safe_name(node.name)] = node.args_node ? node.args_node.child_nodes.size : 0
         node.receiver_node.accept(self)
         print ".#{safe_name(node.name)}("
         first = true
         node.args_node.child_nodes.each {|n| print ", " unless first; first = false; n.accept self}
         print ")"
+        @node_stack.pop
       end
 
       def visitFCallNode(node)
+        @node_stack.push node
         @methods[safe_name(node.name)] = node.args_node ? node.args_node.child_nodes.size : 0
         print "#{safe_name(node.name)}("
         first = true
         node.args_node.child_nodes.each {|n| print ", " unless first; first = false; n.accept self}
         print ")"
+        @node_stack.pop
       end
 
       def visitVCallNode(node)
+        @node_stack.push node
         @methods[safe_name(node.name)] = 0
         print "#{safe_name(node.name)}();"
+        @node_stack.pop
       end
 
       def visitDefnNode(node)
-        @in_def = true
+        @node_stack.push node
         arity = node.args_node.pre ? node.args_node.pre.child_nodes.size : 0;
-        @methods[safe_name(node.name)] = arity
-        args = arity > 0 ? node.args_node.pre.child_nodes.to_a.map(&:name) : []
-        args.map! {|a| "RObject #{a}"}
-        print "    public #{return_type(node.name)} "
-#        print node.name == "initialize" ? "void " : "RObject "
-        puts "#{safe_name(node.name)}(#{args.join(", ")}) {"
-        puts "        RObject __last = RNil;"
-        node.body_node.accept(self) if node.body_node
-        puts "        return __last;" unless node.name == "initialize"
+        args = arity > 0 ? "RObject " + node.args_node.pre.child_nodes.to_a.map(&:name).join(", RObject ") : ""
+        if in_ctor?
+          puts "    public #{safe_name(current_class.cpath.name)}(#{args}) {"
+          node.body_node.accept(self) if node.body_node
+        elsif
+          @methods[safe_name(node.name)] = arity
+          puts "    public #{return_type(node.name)} #{safe_name(node.name)}(#{args}) {"
+          puts "        RObject __last = RNil;"
+          node.body_node.accept(self) if node.body_node
+          puts "        return __last;"
+        end
         puts "    }"
-        @in_def = false
+        @node_stack.pop
       end
 
       def visitStrNode(node)
@@ -115,9 +132,9 @@ module FastRuby
       end
 
       def visitNewlineNode(node)
-        print "        __last = " if store_last(node)
+        print "        __last = " if in_method? && statement?(node.next_node)
         node.next_node.accept(self)
-        print "; // #{node.position.start_line}" if store_last(node)
+        print "; // #{node.position.start_line}" if ((in_method? or in_ctor?) and statement?(node.next_node))
         puts
       end
 
@@ -126,10 +143,11 @@ module FastRuby
       end
 
       def visitIfNode(node)
+        @node_stack.push node
         print "if ("
-        @in_def = false
+        @stmt_stack.push false
         node.condition.accept(self)
-        @in_def = true
+        @stmt_stack.pop
         print ".toBoolean()) {\n"
         node.then_body.accept(self)
         if node.else_body
@@ -137,14 +155,38 @@ module FastRuby
           node.else_body.accept(self)
         end
         print "}"
+        @node_stack.pop
+      end
+
+      def visitInstAsgnNode(node)
+        @node_stack.push node
+        name = node.name[1..-1]
+        @fields.push name
+        print "(" unless in_ctor?
+        print "this.#{name} = "
+        node.child_nodes.each { |n| n.accept self }
+        print ")" unless in_ctor?
+        @node_stack.pop
       end
 
       def visitLocalVarNode(node)
         print node.name
       end
 
-      def store_last(node)
-        @in_def unless { IfNode => true }[node.next_node.class]
+      def current_class
+        @node_stack.reverse.find { |n| n.is_a? ClassNode }
+      end
+
+      def in_ctor?
+        @node_stack.any? { |n| n.is_a? DefnNode and n.name == "initialize" }
+      end
+
+      def in_method?
+        @node_stack.any? { |n| n.is_a? DefnNode and n.name != "initialize" }
+      end
+
+      def statement?(node)
+        @stmt_stack.last and [IfNode].none? { |c| node.is_a? c }
       end
 
       def return_type(name)
@@ -152,7 +194,7 @@ module FastRuby
       end
 
       def safe_name(name)
-        name.gsub(/[^a-zA-Z0-9_]/) { |s| "__#{Char.getName(s[0].to_i).gsub(/[^a-zA-Z0-9_]/, '_')}" }
+        name.gsub(/[^a-zA-Z0-9_]/) { |s| "__#{Character.getName(s[0].to_i).gsub(/[^a-zA-Z0-9_]/, '_').downcase!}" }
       end
     end
   end
