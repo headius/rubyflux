@@ -14,7 +14,7 @@ module FastRuby
     def compile
       @files.each do |file|
         ast = JRuby.parse(File.read(file))
-        ast.accept(@visitor)
+        @visitor.start_class(File.basename(file).split('.')[0], ast.child_nodes, true)
       end
 
       methods = @visitor.methods
@@ -50,12 +50,30 @@ module FastRuby
       end
 
       def visitClassNode(node)
-        @class_name = node.cpath.name
+        start_class(node.cpath.name, node.child_nodes)
+      end
+
+      def start_class(name, nodes, main = false)
+        @class_name = name
         File.open("#{@class_name}.java", 'w') do |f|
           old_stdout = $stdout.dup
           $stdout.reopen(f)
           puts "public class #{@class_name} extends RObject {"
-          node.child_nodes.each {|n| n.accept self}
+          if main
+            puts "    public static void main(String[] args) {"
+            puts "        new #{@class_name}()._main_();"
+            puts "    }"
+            puts
+            puts "    public RObject _main_() {"
+            puts "        RObject __last = RNil;"
+            @in_def = true
+          end
+          nodes.each {|n| n.accept self}
+          if main
+            puts "        return __last;"
+            puts "    }"
+            @in_def = false
+          end
           puts "}"
           $stdout.reopen(old_stdout)
         end
@@ -66,7 +84,7 @@ module FastRuby
         node.receiver_node.accept(self)
         print ".#{safe_name(node.name)}("
         first = true
-        node.args_node.child_nodes.each {|n| print ", " unless first; first = false; n.accept self}
+        node.args_node.child_nodes.each {|n| print ", " unless first; first = false; n.accept self} if node.args_node
         print ")"
       end
 
@@ -74,7 +92,7 @@ module FastRuby
         @methods[safe_name(node.name)] = node.args_node ? node.args_node.child_nodes.size : 0
         print "#{safe_name(node.name)}("
         first = true
-        node.args_node.child_nodes.each {|n| print ", " unless first; first = false; n.accept self}
+        node.args_node.child_nodes.each {|n| print ", " unless first; first = false; n.accept self} if node.args_node
         print ")"
       end
 
@@ -134,8 +152,29 @@ module FastRuby
         print node.name
       end
 
+      def visitConstDeclNode(node)
+        print "    #{node.name} = "
+        node.valueNode.accept(self)
+      end
+
+      def visitConstNode(node)
+        print node.name
+      end
+
       def safe_name(name)
-        name.gsub(/[^a-zA-Z0-9_]/) { |s| "__#{Char.getName(s[0].to_i).gsub(/[^a-zA-Z0-9_]/, '_')}" }
+        case name
+          when '+'; '_plus_'
+          when '-'; '_minus_'
+          when '*'; '_times_'
+          when '/'; '_divide_'
+          when '<'; '_lt_'
+          when '>'; '_gt_'
+          when '<='; '_le_'
+          when '>='; '_ge_'
+          when '=='; '_equal_'
+          when '<=>'; '_cmp_'
+          else; name
+        end
       end
     end
   end
