@@ -33,14 +33,10 @@ module FastRuby
     def <<(arg)
       case arg
       when /\}\s*else\s*\{\s*$/
-        # @lpad = ' '.*(@lpad.length - @indent);
         emit arg + "\n", true, true
-        # @lpad = ' '.*(@lpad.length + @indent)
       when /\{\s*$/
         emit arg + "\n", false, true
-        # @lpad = ' '.*(@lpad.length + @indent)
       when /\}\s*$/
-        # @lpad = ' '.*(@lpad.length - @indent)
         emit arg + "\n", true
       when /\;\s*$/
         emit arg + "\n"
