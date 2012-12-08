@@ -12,6 +12,8 @@ module FastRuby
   java_import org.eclipse.jface.text.Document
   java_import org.eclipse.jdt.core.dom.Modifier
   ModifierKeyword = Modifier::ModifierKeyword
+  java_import org.eclipse.jdt.core.JavaCore
+  java_import org.eclipse.jdt.core.formatter.DefaultCodeFormatterConstants
 
   class Compiler
     def initialize(files)
@@ -68,8 +70,18 @@ module FastRuby
         robject_cls.body_declarations << method_decl
       end
 
+      document = source_to_document(source)
+
+      puts document.get
+    end
+
+    def source_to_document(source)
       document = Document.new
-      text_edit = source.rewrite(document, nil)
+      options = JavaCore.options
+      options[DefaultCodeFormatterConstants::FORMATTER_INDENTATION_SIZE] = '4'
+      options[DefaultCodeFormatterConstants::FORMATTER_TAB_CHAR] = 'space'
+      options[DefaultCodeFormatterConstants::FORMATTER_TAB_SIZE] = '4'
+      text_edit = source.rewrite(document, options)
       text_edit.apply document
 
       document
