@@ -15,7 +15,33 @@ module FastRuby
   java_import org.eclipse.jdt.core.JavaCore
   java_import org.eclipse.jdt.core.formatter.DefaultCodeFormatterConstants
 
+  module JDTUtils
+    def source_to_document(source)
+      document = Document.new
+      options = JavaCore.options
+      options[DefaultCodeFormatterConstants::FORMATTER_INDENTATION_SIZE] = '4'
+      options[DefaultCodeFormatterConstants::FORMATTER_TAB_CHAR] = 'space'
+      options[DefaultCodeFormatterConstants::FORMATTER_TAB_SIZE] = '4'
+      text_edit = source.rewrite(document, options)
+      text_edit.apply document
+
+      document
+    end
+
+    def new_source
+      parser = ASTParser.newParser(AST::JLS3)
+      parser.source = ''.to_java.to_char_array
+
+      cu = parser.create_ast(nil)
+      cu.record_modifications
+
+      cu
+    end
+  end
+
   class Compiler
+    include JDTUtils
+
     def initialize(files)
       @files = files
       @visitor = Visitor.new
@@ -27,9 +53,13 @@ module FastRuby
         @visitor.start_class(File.basename(file).split('.')[0], ast.child_nodes, true)
       end
 
-      methods = @visitor.methods
+      @visitor.sources.each do |source|
+        puts source_to_document(source).get
+      end
       
-      robject_doc = build_robject(methods)
+      robject_doc = build_robject(@visitor.methods)
+
+      puts robject_doc.get
     end
 
     def build_robject(methods)
@@ -71,38 +101,23 @@ module FastRuby
       end
 
       document = source_to_document(source)
-
-      puts document.get
-    end
-
-    def source_to_document(source)
-      document = Document.new
-      options = JavaCore.options
-      options[DefaultCodeFormatterConstants::FORMATTER_INDENTATION_SIZE] = '4'
-      options[DefaultCodeFormatterConstants::FORMATTER_TAB_CHAR] = 'space'
-      options[DefaultCodeFormatterConstants::FORMATTER_TAB_SIZE] = '4'
-      text_edit = source.rewrite(document, options)
-      text_edit.apply document
-
-      document
-    end
-
-    def new_source
-      parser = ASTParser.newParser(AST::JLS3)
-      parser.source = ''.to_java.to_char_array
-
-      cu = parser.create_ast(nil)
-      cu.record_modifications
-
-      cu
     end
 
     class Visitor
+      include JDTUtils
+
       include org.jruby.ast.visitor.NodeVisitor
+
+      attr_accessor :sources
+      attr_accessor :method_decls
+      attr_accessor :class_decl
 
       def initialize
         @methods = {}
         @classes = []
+        @sources = []
+        @method_decls = []
+        @class_decl = nil
       end
 
       attr_accessor :methods
@@ -116,61 +131,71 @@ module FastRuby
       end
 
       def start_class(name, nodes, main = false)
-=begin
         @class_name = name
-        @cls = @model._class(@class_name)
-        @cls._extends model.direct_class "RObject"
 
-        if main
-          main = @model.method(JMod::PUBLIC | JMod::STATIC, model.direct_class "void", "main")
-          main.param(model.direct_class "String[]", "args")
-          main.direct_statement "new #{@class_name}()._main_();"
+        new_source.tap do |source|
+          sources.push source
+          ast = source.ast
+          @class_decl = ast.new_type_declaration
+          class_decl.interface = false
+          class_decl.name = ast.new_simple_name(@class_name)
+          class_decl.superclass_type = ast.new_simple_type(ast.new_simple_name("RObject"))
 
-          @method = @model.method(JMod::PUBLIC, model.direct_class "RObject", "main")
-          @__last = @method.body.decl model.direct_class("RObject"), "__last"
-          @method.body.assign(@__last, )
-        end
+          source.types << class_decl
 
-        nodes.each {|n| n.accept self}
-
-          methods.each do |name, arity|
-            cls.method(JMod::PUBLIC, cls, name).tap do |method|
-              if arity > 0
-                (0..(arity - 1)).to_a.map {|i| method.param(cls, "arg#{i}")}
-              end
-
-              method.body.tap do |body|
-                body.direct_statement "throw new RuntimeException(\"#{name}\");"
-              end
-            end
-          end
-        end
-
-        model.build(java.io.File.new('.'))
-        File.open("#{@class_name}.java", 'w') do |f|
-          old_stdout = $stdout.dup
-          $stdout.reopen(f)
-          puts "public class #{@class_name} extends RObject {"
           if main
-            puts "    public static void main(String[] args) {"
-            puts "        new #{@class_name}()._main_();"
-            puts "    }"
-            puts
-            puts "    public RObject _main_() {"
-            puts "        RObject __last = RNil;"
+            main_method = ast.new_method_declaration
+            main_method.name = ast.new_simple_name("main")
+            main_method.modifiers << ast.new_modifier(ModifierKeyword::PUBLIC_KEYWORD)
+            main_method.modifiers << ast.new_modifier(ModifierKeyword::STATIC_KEYWORD)
+            args_var = ast.new_single_variable_declaration
+            args_var.type = ast.new_array_type(ast.new_simple_type(ast.new_simple_name("String")))
+            args_var.name = ast.new_simple_name("args")
+            main_method.parameters << args_var
+
+            body = ast.new_block
+            main_call = ast.new_method_invocation
+            main_call.name = ast.new_simple_name("_main_")
+            new_obj = ast.new_class_instance_creation
+            new_obj.type = ast.new_simple_type(ast.new_simple_name(@class_name))
+            main_call.expression = new_obj
+            body.statements << ast.new_expression_statement(main_call)
+            main_method.body = body
+
+            class_decl.body_declarations << main_method
+
+            ruby_main = ast.new_method_declaration
+            ruby_main.name = ast.new_simple_name "_main_"
+            ruby_main.return_type2 = ast.new_simple_type(ast.new_simple_name("RObject"))
+
+            body = ast.new_block
+            last_var = ast.new_single_variable_declaration
+            last_var.name = ast.new_simple_name("$last")
+            last_var.type = ast.new_simple_type(ast.new_simple_name("ROBject"))
+            nil_load = ast.new_field_access
+            nil_load.name = ast.new_simple_name("RNil")
+            last_assignment = ast.new_assignment
+            last_assignment.left_hand_side = ast.new_simple_name("$last")
+            last_assignment.right_hand_side = nil_load
+            body.statements << ast.new_expression_statement(last_assignment)
+
+            ruby_main.body = body
+
+            method_decls.push ruby_main
+            class_decl.body_declarations << ruby_main
+
             @in_def = true
           end
+
           nodes.each {|n| n.accept self}
+
           if main
-            puts "        return __last;"
-            puts "    }"
+            ruby_main = method_decls.pop
+            return_last = ast.new_return_statement
+            return_last.expression = ast.new_simple_name("$last")
             @in_def = false
           end
-          puts "}"
-          $stdout.reopen(old_stdout)
         end
-=end
-        nodes.each {|n| n.accept self}
       end
 
       def visitCallNode(node)
@@ -197,17 +222,56 @@ module FastRuby
 
       def visitDefnNode(node)
         @in_def = true
+
         arity = node.args_node.pre ? node.args_node.pre.child_nodes.size : 0;
-        @methods[safe_name(node.name)] = arity
+        proper_name = safe_name(node.name)
+        @methods[proper_name] = arity
         args = arity > 0 ? node.args_node.pre.child_nodes.to_a.map(&:name) : []
         args.map! {|a| "RObject #{a}"}
-        print "    public "
-        print "RObject " unless node.name == "initialize"
-        puts "#{safe_name(node.name)}(#{args.join(", ")}) {"
-        puts "        RObject __last = RNil;"
+        source = sources.last
+        ast = source.ast
+
+        method_decl = ast.new_method_declaration
+        method_decl.name = ast.new_simple_name(proper_name)
+
+        class_decl.body_declarations << method_decl
+        method_decl.modifiers << ast.new_modifier(ModifierKeyword::PUBLIC_KEYWORD)
+        robject_type = ast.new_simple_type(ast.new_simple_name("ROBject"))
+
+        unless node.name == "initialize"
+          method_decl.return_type2 = robject_type
+        end
+
+        args.each do |a|
+          arg_decl = ast.new_single_variable_declaration
+          arg_decl.name = ast.new_simple_name('a')
+          arg_decl.type = ast.new_simple_type(ast.new_simple_name("ROBject"))
+          method_decl.parameters << arg_decl
+        end
+
+        body = ast.new_block
+        last_var = ast.new_single_variable_declaration
+        last_var.name = ast.new_simple_name("$last")
+        last_var.type = ast.new_simple_type(ast.new_simple_name("ROBject"))
+        nil_load = ast.new_field_access
+        nil_load.name = ast.new_simple_name("RNil")
+        last_assignment = ast.new_assignment
+        last_assignment.left_hand_side = ast.new_simple_name("$last")
+        last_assignment.right_hand_side = nil_load
+        body.statements << ast.new_expression_statement(last_assignment)
+
+        method_decl.body = body
+
+        method_decls << method_decl
+
         node.body_node.accept(self) if node.body_node
-        puts "        return __last;" unless node.name == "initialize"
-        puts "    }"
+
+        unless node.name == "initialize"
+          return_last = ast.new_return_statement
+          return_last.expression = ast.new_simple_name("$last")
+          body.statements << return_last
+        end
+
         @in_def = false
       end
 
