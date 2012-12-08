@@ -1,9 +1,17 @@
 require 'jruby'
 require 'java'
-Char = java.lang.Character
+require 'fastruby-1.0-SNAPSHOT.jar'
 
 module FastRuby
   BUILTINS = %w[puts]
+
+  Char = java.lang.Character
+  java_import org.eclipse.jdt.core.dom.AST
+  java_import org.eclipse.jdt.core.dom.ASTParser
+  java_import org.eclipse.jdt.core.dom.rewrite.ASTRewrite
+  java_import org.eclipse.jface.text.Document
+  java_import org.eclipse.jdt.core.dom.Modifier
+  ModifierKeyword = Modifier::ModifierKeyword
 
   class Compiler
     def initialize(files)
@@ -18,21 +26,63 @@ module FastRuby
       end
 
       methods = @visitor.methods
+      
+      robject_doc = build_robject(methods)
+    end
 
-      File.open("RObject.java", 'w') do |f|
-        old_stdout = $stdout.dup
-        $stdout.reopen(f)
-        puts "public class RObject extends RKernel {"
-        methods.each {|name, arity|
-          next if BUILTINS.include? name
-          args = arity > 0 ? (0..(arity - 1)).to_a.map {|i| "RObject arg#{i}"} : []
-          puts "    public RObject #{name}(#{args.join(", ")}) {"
-          puts "        throw new RuntimeException(\"#{name}\");"
-          puts "    }"
-        }
-        puts "}"
-        $stdout.reopen(old_stdout)
+    def build_robject(methods)
+      source = new_source
+
+      ast = source.ast
+
+      robject_cls = ast.new_type_declaration
+      robject_cls.interface = false
+      robject_cls.name = ast.new_simple_name("RObject")
+
+      robject_cls.superclass_type = ast.new_simple_type(ast.new_simple_name("RKernel"))
+      source.types << robject_cls
+
+      methods.each do |name, arity|
+        method_decl = ast.new_method_declaration
+        method_decl.name = ast.new_simple_name name
+        method_decl.modifiers << ast.new_modifier(ModifierKeyword::PUBLIC_KEYWORD)
+
+        if arity > 0
+          (0..arity).each do |i|
+            arg = ast.new_single_variable_declaration
+            arg.name = ast.new_simple_name("arg%02d" % i)
+            arg.type = ast.new_simple_type(ast.new_simple_name("RObject"))
+            method_decl.parameters << arg
+          end
+        end
+
+        body = ast.new_block
+        throw_statement = ast.new_throw_statement
+        expression = ast.new_class_instance_creation
+        expression.type = ast.new_simple_type(ast.new_simple_name("RuntimeException"))
+        expression.arguments << ast.new_string_literal.tap {|s| s.literal_value = name}
+        throw_statement.expression = expression
+        body.statements << throw_statement
+        method_decl.body = body
+
+        robject_cls.body_declarations << method_decl
       end
+
+      document = Document.new
+      text_edit = source.rewrite(document, nil)
+      text_edit.apply document
+
+      document
+    end
+
+    def new_source
+      parser = ASTParser.newParser(AST::JLS3)
+      parser.source = ''.to_java.to_char_array
+
+      cu = parser.create_ast(nil)
+      cu.record_modifications
+
+      cu
     end
 
     class Visitor
@@ -54,7 +104,37 @@ module FastRuby
       end
 
       def start_class(name, nodes, main = false)
+=begin
         @class_name = name
+        @cls = @model._class(@class_name)
+        @cls._extends model.direct_class "RObject"
+
+        if main
+          main = @model.method(JMod::PUBLIC | JMod::STATIC, model.direct_class "void", "main")
+          main.param(model.direct_class "String[]", "args")
+          main.direct_statement "new #{@class_name}()._main_();"
+
+          @method = @model.method(JMod::PUBLIC, model.direct_class "RObject", "main")
+          @__last = @method.body.decl model.direct_class("RObject"), "__last"
+          @method.body.assign(@__last, )
+        end
+
+        nodes.each {|n| n.accept self}
+
+          methods.each do |name, arity|
+            cls.method(JMod::PUBLIC, cls, name).tap do |method|
+              if arity > 0
+                (0..(arity - 1)).to_a.map {|i| method.param(cls, "arg#{i}")}
+              end
+
+              method.body.tap do |body|
+                body.direct_statement "throw new RuntimeException(\"#{name}\");"
+              end
+            end
+          end
+        end
+
+        model.build(java.io.File.new('.'))
         File.open("#{@class_name}.java", 'w') do |f|
           old_stdout = $stdout.dup
           $stdout.reopen(f)
@@ -77,6 +157,8 @@ module FastRuby
           puts "}"
           $stdout.reopen(old_stdout)
         end
+=end
+        nodes.each {|n| n.accept self}
       end
 
       def visitCallNode(node)
