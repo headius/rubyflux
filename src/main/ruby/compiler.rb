@@ -44,26 +44,35 @@ module FastRuby
 
     def initialize(files)
       @files = files
-      @visitor = Visitor.new
+      @sources = []
+      @methods = {}
     end
+
+    attr_accessor :sources, :methods
 
     def compile
       @files.each do |file|
         ast = JRuby.parse(File.read(file))
-        @visitor.start_class(File.basename(file).split('.')[0], ast.child_nodes, true)
+
+        source = new_source
+        sources << source
+
+        jdt_ast = source.ast
+
+        @visitor = ClassVisitor.new(self, jdt_ast, source, File.basename(file).split('.')[0], ast)
+        @visitor.start
       end
 
-      @visitor.sources.each do |source|
+      build_robject
+
+      sources.each do |source|
         puts source_to_document(source).get
       end
-      
-      robject_doc = build_robject(@visitor.methods)
-
-      puts robject_doc.get
     end
 
-    def build_robject(methods)
+    def build_robject
       source = new_source
+      sources << source
 
       ast = source.ast
 
@@ -99,157 +108,102 @@ module FastRuby
 
         robject_cls.body_declarations << method_decl
       end
-
-      document = source_to_document(source)
     end
 
-    class Visitor
+    class ClassVisitor
       include JDTUtils
 
       include org.jruby.ast.visitor.NodeVisitor
 
-      attr_accessor :sources
-      attr_accessor :method_decls
-      attr_accessor :class_decl
-
-      def initialize
-        @methods = {}
-        @classes = []
-        @sources = []
+      def initialize(compiler, ast, source, class_name, node)
+        @compiler, @ast, @source, @class_name, @node = compiler, ast, source, class_name, node
         @method_decls = []
         @class_decl = nil
       end
 
-      attr_accessor :methods
+      attr_accessor :compiler, :ast, :source
+      attr_accessor :class_decl
+
+      def start
+	@class_decl = ast.new_type_declaration
+	class_decl.interface = false
+	class_decl.name = ast.new_simple_name(@class_name)
+	class_decl.superclass_type = ast.new_simple_type(ast.new_simple_name("RObject"))
+
+	source.types << class_decl
+
+        define_main
+
+	@method_visitor = MethodVisitor.new(ast, self, @node)
+	@method_visitor.start
+      end
+
+      def define_main
+        main_method = ast.new_method_declaration
+        main_method.name = ast.new_simple_name("main")
+        main_method.modifiers << ast.new_modifier(ModifierKeyword::PUBLIC_KEYWORD)
+        main_method.modifiers << ast.new_modifier(ModifierKeyword::STATIC_KEYWORD)
+        args_var = ast.new_single_variable_declaration
+        args_var.type = ast.new_array_type(ast.new_simple_type(ast.new_simple_name("String")))
+        args_var.name = ast.new_simple_name("args")
+        main_method.parameters << args_var
+
+        body = ast.new_block
+        main_call = ast.new_method_invocation
+        main_call.name = ast.new_simple_name("_main_")
+        new_obj = ast.new_class_instance_creation
+        new_obj.type = ast.new_simple_type(ast.new_simple_name(@class_name))
+        main_call.expression = new_obj
+        body.statements << ast.new_expression_statement(main_call)
+        main_method.body = body
+
+        class_decl.body_declarations << main_method
+      end
+    end
+
+    class MethodVisitor
+      include JDTUtils
+
+      include org.jruby.ast.visitor.NodeVisitor
+
+      def initialize(ast, class_visitor, node)
+        @ast, @class_visitor, @node = ast, class_visitor, node
+      end
+
+      attr_accessor :ast, :class_visitor, :node, :body
 
       def method_missing(name, node)
         node.child_nodes.each {|n| n.accept self}
       end
 
-      def visitClassNode(node)
-        start_class(node.cpath.name, node.child_nodes)
-      end
+      def start
+        case node
+        when org.jruby.ast.RootNode
+          # no name; it's the main body of a script
+          ruby_method = ast.new_method_declaration
+          ruby_method.name = ast.new_simple_name "_main_"
+          ruby_method.return_type2 = ast.new_simple_type(ast.new_simple_name("RObject"))
 
-      def start_class(name, nodes, main = false)
-        @class_name = name
+          body_node = node
+        when org.jruby.ast.ClassNode
+          ruby_method = ast.new_method_declaration
+          ruby_method.name = ast.new_simple_name node.cpath.name
+          ruby_method.return_type2 = ast.new_simple_type(ast.new_simple_name("RObject"))
 
-        new_source.tap do |source|
-          sources.push source
-          ast = source.ast
-          @class_decl = ast.new_type_declaration
-          class_decl.interface = false
-          class_decl.name = ast.new_simple_name(@class_name)
-          class_decl.superclass_type = ast.new_simple_type(ast.new_simple_name("RObject"))
+          define_method
 
-          source.types << class_decl
+          body_node = node.body_node
+        else
+          ruby_method = ast.new_method_declaration
+          ruby_method.name = ast.new_simple_name node.name
+          ruby_method.return_type2 = ast.new_simple_type(ast.new_simple_name("RObject"))
 
-          if main
-            main_method = ast.new_method_declaration
-            main_method.name = ast.new_simple_name("main")
-            main_method.modifiers << ast.new_modifier(ModifierKeyword::PUBLIC_KEYWORD)
-            main_method.modifiers << ast.new_modifier(ModifierKeyword::STATIC_KEYWORD)
-            args_var = ast.new_single_variable_declaration
-            args_var.type = ast.new_array_type(ast.new_simple_type(ast.new_simple_name("String")))
-            args_var.name = ast.new_simple_name("args")
-            main_method.parameters << args_var
+          define_method
 
-            body = ast.new_block
-            main_call = ast.new_method_invocation
-            main_call.name = ast.new_simple_name("_main_")
-            new_obj = ast.new_class_instance_creation
-            new_obj.type = ast.new_simple_type(ast.new_simple_name(@class_name))
-            main_call.expression = new_obj
-            body.statements << ast.new_expression_statement(main_call)
-            main_method.body = body
-
-            class_decl.body_declarations << main_method
-
-            ruby_main = ast.new_method_declaration
-            ruby_main.name = ast.new_simple_name "_main_"
-            ruby_main.return_type2 = ast.new_simple_type(ast.new_simple_name("RObject"))
-
-            body = ast.new_block
-            last_var = ast.new_single_variable_declaration
-            last_var.name = ast.new_simple_name("$last")
-            last_var.type = ast.new_simple_type(ast.new_simple_name("ROBject"))
-            nil_load = ast.new_field_access
-            nil_load.name = ast.new_simple_name("RNil")
-            last_assignment = ast.new_assignment
-            last_assignment.left_hand_side = ast.new_simple_name("$last")
-            last_assignment.right_hand_side = nil_load
-            body.statements << ast.new_expression_statement(last_assignment)
-
-            ruby_main.body = body
-
-            method_decls.push ruby_main
-            class_decl.body_declarations << ruby_main
-
-            @in_def = true
-          end
-
-          nodes.each {|n| n.accept self}
-
-          if main
-            ruby_main = method_decls.pop
-            return_last = ast.new_return_statement
-            return_last.expression = ast.new_simple_name("$last")
-            @in_def = false
-          end
-        end
-      end
-
-      def visitCallNode(node)
-        @methods[safe_name(node.name)] = node.args_node ? node.args_node.child_nodes.size : 0
-        node.receiver_node.accept(self)
-        print ".#{safe_name(node.name)}("
-        first = true
-        node.args_node.child_nodes.each {|n| print ", " unless first; first = false; n.accept self} if node.args_node
-        print ")"
-      end
-
-      def visitFCallNode(node)
-        @methods[safe_name(node.name)] = node.args_node ? node.args_node.child_nodes.size : 0
-        print "#{safe_name(node.name)}("
-        first = true
-        node.args_node.child_nodes.each {|n| print ", " unless first; first = false; n.accept self} if node.args_node
-        print ")"
-      end
-
-      def visitVCallNode(node)
-        @methods[safe_name(node.name)] = 0
-        print "#{safe_name(node.name)}();"
-      end
-
-      def visitDefnNode(node)
-        @in_def = true
-
-        arity = node.args_node.pre ? node.args_node.pre.child_nodes.size : 0;
-        proper_name = safe_name(node.name)
-        @methods[proper_name] = arity
-        args = arity > 0 ? node.args_node.pre.child_nodes.to_a.map(&:name) : []
-        args.map! {|a| "RObject #{a}"}
-        source = sources.last
-        ast = source.ast
-
-        method_decl = ast.new_method_declaration
-        method_decl.name = ast.new_simple_name(proper_name)
-
-        class_decl.body_declarations << method_decl
-        method_decl.modifiers << ast.new_modifier(ModifierKeyword::PUBLIC_KEYWORD)
-        robject_type = ast.new_simple_type(ast.new_simple_name("ROBject"))
-
-        unless node.name == "initialize"
-          method_decl.return_type2 = robject_type
+          body_node = node.body_node
         end
 
-        args.each do |a|
-          arg_decl = ast.new_single_variable_declaration
-          arg_decl.name = ast.new_simple_name('a')
-          arg_decl.type = ast.new_simple_type(ast.new_simple_name("ROBject"))
-          method_decl.parameters << arg_decl
-        end
-
-        body = ast.new_block
+        @body = ast.new_block
         last_var = ast.new_single_variable_declaration
         last_var.name = ast.new_simple_name("$last")
         last_var.type = ast.new_simple_type(ast.new_simple_name("ROBject"))
@@ -260,63 +214,136 @@ module FastRuby
         last_assignment.right_hand_side = nil_load
         body.statements << ast.new_expression_statement(last_assignment)
 
-        method_decl.body = body
+        ruby_method.body = body
 
-        method_decls << method_decl
+        class_decl.body_declarations << ruby_method
 
-        node.body_node.accept(self) if node.body_node
+        body_node.accept self if body_node
 
-        unless node.name == "initialize"
-          return_last = ast.new_return_statement
-          return_last.expression = ast.new_simple_name("$last")
-          body.statements << return_last
+        return_last = ast.new_return_statement
+        return_last.expression = ast.new_simple_name("$last")
+        body.statements << return_last
+      end
+
+      def class_decl
+        class_visitor.class_decl
+      end
+
+      def visitClassNode(node)
+        source = new_source
+        class_visitor.compiler.sources << source
+
+        ast = source.ast
+
+        new_class_visitor = ClassVisitor.new(class_visitor.compiler, ast, source, node.cpath.name, node)
+        new_class_visitor.start
+      end
+
+      def visitCallNode(node)
+=begin
+        @methods[safe_name(node.name)] = node.args_node ? node.args_node.child_nodes.size : 0
+        node.receiver_node.accept(self)
+        print ".#{safe_name(node.name)}("
+        first = true
+        node.args_node.child_nodes.each {|n| print ", " unless first; first = false; n.accept self} if node.args_node
+        print ")"
+=end
+      end
+
+      def visitFCallNode(node)
+=begin
+        @methods[safe_name(node.name)] = node.args_node ? node.args_node.child_nodes.size : 0
+        print "#{safe_name(node.name)}("
+        first = true
+        node.args_node.child_nodes.each {|n| print ", " unless first; first = false; n.accept self} if node.args_node
+        print ")"
+=end
+      end
+
+      def visitVCallNode(node)
+=begin
+        @methods[safe_name(node.name)] = 0
+        print "#{safe_name(node.name)}();"
+=end
+      end
+
+      def visitDefnNode(node)
+        method_visitor = MethodVisitor.new(ast, class_visitor, node)
+        method_visitor.start
+      end
+
+      def define_method
+        method_decl = ast.new_method_declaration
+
+        class_decl.body_declarations << method_decl
+        method_decl.modifiers << ast.new_modifier(ModifierKeyword::PUBLIC_KEYWORD)
+
+        if node.kind_of? org.jruby.ast.DefnNode
+          args_node = node.args_node.pre
+          arity = args_node ? args_node.child_nodes.size : 0;
+          args = args_node ? args_node.child_nodes : []
+          proper_name = safe_name(node.name)
+          class_visitor.compiler.methods[proper_name] = arity
+
+          robject_type = ast.new_simple_type(ast.new_simple_name("ROBject"))
+
+          unless proper_name == "initialize"
+            method_decl.return_type2 = robject_type
+          end
+
+          args && args.each do |a|
+            arg_decl = ast.new_single_variable_declaration
+            arg_decl.name = ast.new_simple_name(a.name)
+            arg_decl.type = ast.new_simple_type(ast.new_simple_name("ROBject"))
+            method_decl.parameters << arg_decl
+          end
+        else
+          proper_name = node.cpath.name
+          class_visitor.compiler.methods[node.cpath.name] = 0
         end
 
-        @in_def = false
+        method_decl.name = ast.new_simple_name(proper_name)
       end
 
       def visitStrNode(node)
-        print "new RString(\"#{node.value}\")"
+        #print "new RString(\"#{node.value}\")"
       end
 
       def visitFixnumNode(node)
-        print "new RFixnum(#{node.value})"
+        #print "new RFixnum(#{node.value})"
       end
 
       def visitNewlineNode(node)
-        print "        __last = " if @in_def
         node.next_node.accept(self)
-        print ";" if @in_def
-        puts
       end
 
       def visitNilNode(node)
-        print "RNil"
+        #print "RNil"
       end
 
       def visitIfNode(node)
-        print "if ("
+        # print "if ("
         node.condition.accept(self)
-        print ".toBoolean()) {\n"
+        #print ".toBoolean()) {\n"
         node.then_body.accept(self)
         if node.else_body
-          print "} else {\n"
+        #  print "} else {\n"
           node.else_body.accept(self)
         end
-        print "}"
+        #print "}"
       end
 
       def visitLocalVarNode(node)
-        print node.name
+        #print node.name
       end
 
       def visitConstDeclNode(node)
-        print "    #{node.name} = "
-        node.valueNode.accept(self)
+        #print "    #{node.name} = "
+        node.value_node.accept(self)
       end
 
       def visitConstNode(node)
-        print node.name
+        #print node.name
       end
 
       def safe_name(name)
