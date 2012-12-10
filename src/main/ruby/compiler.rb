@@ -216,73 +216,13 @@ module FastRuby
         class_decl.body_declarations << ruby_method
         ruby_method.modifiers << ast.new_modifier(ModifierKeyword::PUBLIC_KEYWORD)
 
-        @body = ast.new_block
-        last_var = ast.new_single_variable_declaration
-        last_var.name = ast.new_simple_name("$last")
-        last_var.type = ast.new_simple_type(ast.new_simple_name("ROBject"))
-        nil_load = ast.new_field_access
-        nil_load.name = ast.new_simple_name("RNil")
-        last_assignment = ast.new_assignment
-        last_assignment.left_hand_side = ast.new_simple_name("$last")
-        last_assignment.right_hand_side = nil_load
-        body.statements << ast.new_expression_statement(last_assignment)
+        body = BodyCompiler.new(ast, class_visitor, node.body_node, do_return).start
 
         ruby_method.body = body
-
-        body_node.accept self if body_node
-
-        if do_return
-          return_last = ast.new_return_statement
-          return_last.expression = ast.new_simple_name("$last")
-          body.statements << return_last
-        end
       end
 
       def class_decl
         class_visitor.class_decl
-      end
-
-      def visitClassNode(node)
-        source = new_source
-        class_visitor.compiler.sources << source
-
-        ast = source.ast
-
-        new_class_visitor = ClassVisitor.new(class_visitor.compiler, ast, source, node.cpath.name, node)
-        new_class_visitor.start
-      end
-
-      def visitCallNode(node)
-=begin
-        @methods[safe_name(node.name)] = node.args_node ? node.args_node.child_nodes.size : 0
-        node.receiver_node.accept(self)
-        print ".#{safe_name(node.name)}("
-        first = true
-        node.args_node.child_nodes.each {|n| print ", " unless first; first = false; n.accept self} if node.args_node
-        print ")"
-=end
-      end
-
-      def visitFCallNode(node)
-=begin
-        @methods[safe_name(node.name)] = node.args_node ? node.args_node.child_nodes.size : 0
-        print "#{safe_name(node.name)}("
-        first = true
-        node.args_node.child_nodes.each {|n| print ", " unless first; first = false; n.accept self} if node.args_node
-        print ")"
-=end
-      end
-
-      def visitVCallNode(node)
-=begin
-        @methods[safe_name(node.name)] = 0
-        print "#{safe_name(node.name)}();"
-=end
-      end
-
-      def visitDefnNode(node)
-        method_visitor = MethodVisitor.new(ast, class_visitor, node)
-        method_visitor.start
       end
 
       def define_args(method_decl)
@@ -304,22 +244,169 @@ module FastRuby
         arity
       end
 
+      def safe_name(name)
+        case name
+          when '+'; '_plus_'
+          when '-'; '_minus_'
+          when '*'; '_times_'
+          when '/'; '_divide_'
+          when '<'; '_lt_'
+          when '>'; '_gt_'
+          when '<='; '_le_'
+          when '>='; '_ge_'
+          when '=='; '_equal_'
+          when '<=>'; '_cmp_'
+          else; name
+        end
+      end
+    end
+
+    class BodyCompiler
+      def initialize(ast, class_visitor, node, do_return)
+        @ast, @class_visitor, @node, @do_return = ast, class_visitor, node, do_return
+      end
+
+      attr_accessor :ast, :class_visitor, :node, :body, :do_return
+
+      def method_missing(name, node)
+        node.child_nodes.each {|n| n.accept self}
+      end
+
+      def start
+        body = ast.new_block
+        last_var = ast.new_single_variable_declaration
+        last_var.name = ast.new_simple_name("$last")
+        last_var.type = ast.new_simple_type(ast.new_simple_name("ROBject"))
+        nil_load = ast.new_field_access
+        nil_load.name = ast.new_simple_name("RNil")
+        last_assignment = ast.new_assignment
+        last_assignment.left_hand_side = ast.new_simple_name("$last")
+        last_assignment.right_hand_side = nil_load
+        body.statements << ast.new_expression_statement(last_assignment)
+
+        children = defined?(node.child_nodes) ? node.child_nodes : node
+        children && children.each do |child_node|
+          statement = StatementCompiler.new(ast, class_visitor, child_node).start
+          body.statements << statement
+        end
+
+        if do_return
+          return_last = ast.new_return_statement
+          return_last.expression = ast.new_simple_name("$last")
+          body.statements << return_last
+        end
+
+        body
+      end
+    end
+
+    class StatementCompiler
+      include JDTUtils
+
+      include org.jruby.ast.visitor.NodeVisitor
+
+      def initialize(ast, class_visitor, node)
+        @ast, @class_visitor, @node = ast, class_visitor, node
+      end
+
+      attr_accessor :ast, :class_visitor, :node
+
+      def start
+        last_assignment = ast.new_assignment
+        last_assignment.left_hand_side = ast.new_simple_name("$last")
+        last_assignment.right_hand_side = ExpressionCompiler.new(ast, class_visitor, node).start
+
+        ast.new_expression_statement(last_assignment)
+      end
+    end
+
+    class ExpressionCompiler
+      include JDTUtils
+
+      include org.jruby.ast.visitor.NodeVisitor
+
+      def initialize(ast, class_visitor, node)
+        @ast, @class_visitor, @node = ast, class_visitor, node
+      end
+
+      attr_accessor :ast, :class_visitor, :node
+
+      def start
+        expression = node.accept(self)
+
+        expression
+      end
+
+      def nil_expression(*args)
+        last_value = ast.new_field_access
+        last_value.name = ast.new_simple_name('RNil')
+
+        last_value
+      end
+      alias method_missing nil_expression
+      
+      def visitClassNode(node)
+        source = new_source
+        class_visitor.compiler.sources << source
+
+        new_ast = source.ast
+
+        new_class_visitor = ClassVisitor.new(class_visitor.compiler, new_ast, source, node.cpath.name, node)
+        new_class_visitor.start
+
+        nil_expression
+      end
+
+=begin
+      def visitCallNode(node)
+        @methods[safe_name(node.name)] = node.args_node ? node.args_node.child_nodes.size : 0
+        node.receiver_node.accept(self)
+        print ".#{safe_name(node.name)}("
+        first = true
+        node.args_node.child_nodes.each {|n| print ", " unless first; first = false; n.accept self} if node.args_node
+        print ")"
+      end
+
+      def visitFCallNode(node)
+        @methods[safe_name(node.name)] = node.args_node ? node.args_node.child_nodes.size : 0
+        print "#{safe_name(node.name)}("
+        first = true
+        node.args_node.child_nodes.each {|n| print ", " unless first; first = false; n.accept self} if node.args_node
+        print ")"
+      end
+
+      def visitVCallNode(node)
+        @methods[safe_name(node.name)] = 0
+        print "#{safe_name(node.name)}();"
+      end
+=end
+
+      def visitDefnNode(node)
+        method_visitor = MethodVisitor.new(ast, class_visitor, node)
+        method_visitor.start
+
+        nil_expression
+      end
+
+=begin
       def visitStrNode(node)
-        #print "new RString(\"#{node.value}\")"
+        print "new RString(\"#{node.value}\")"
       end
 
       def visitFixnumNode(node)
-        #print "new RFixnum(#{node.value})"
+        print "new RFixnum(#{node.value})"
       end
+=end
 
       def visitNewlineNode(node)
         node.next_node.accept(self)
       end
 
       def visitNilNode(node)
-        #print "RNil"
+        nil_expression
       end
 
+=begin
       def visitIfNode(node)
         # print "if ("
         node.condition.accept(self)
@@ -344,6 +431,7 @@ module FastRuby
       def visitConstNode(node)
         #print node.name
       end
+=end
 
       def safe_name(name)
         case name
