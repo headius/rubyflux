@@ -177,6 +177,8 @@ module FastRuby
       end
 
       def start
+        do_return = false
+
         case node
         when org.jruby.ast.RootNode
           # no name; it's the main body of a script
@@ -187,21 +189,32 @@ module FastRuby
           body_node = node
         when org.jruby.ast.ClassNode
           ruby_method = ast.new_method_declaration
-          ruby_method.name = ast.new_simple_name node.cpath.name
-          ruby_method.return_type2 = ast.new_simple_type(ast.new_simple_name("RObject"))
-
-          define_method
+          proper_name = node.cpath.name + "$body"
+          ruby_method.name = ast.new_simple_name proper_name
 
           body_node = node.body_node
         else
           ruby_method = ast.new_method_declaration
-          ruby_method.name = ast.new_simple_name node.name
-          ruby_method.return_type2 = ast.new_simple_type(ast.new_simple_name("RObject"))
 
-          define_method
+          arity = define_args(ruby_method)
+
+          proper_name = safe_name(node.name)
+          class_visitor.compiler.methods[proper_name] = arity
+
+          ruby_method.name = ast.new_simple_name proper_name
+
+          robject_type = ast.new_simple_type(ast.new_simple_name("ROBject"))
+
+          unless proper_name == "initialize"
+            ruby_method.return_type2 = robject_type
+            do_return = true
+          end
 
           body_node = node.body_node
         end
+
+        class_decl.body_declarations << ruby_method
+        ruby_method.modifiers << ast.new_modifier(ModifierKeyword::PUBLIC_KEYWORD)
 
         @body = ast.new_block
         last_var = ast.new_single_variable_declaration
@@ -216,13 +229,13 @@ module FastRuby
 
         ruby_method.body = body
 
-        class_decl.body_declarations << ruby_method
-
         body_node.accept self if body_node
 
-        return_last = ast.new_return_statement
-        return_last.expression = ast.new_simple_name("$last")
-        body.statements << return_last
+        if do_return
+          return_last = ast.new_return_statement
+          return_last.expression = ast.new_simple_name("$last")
+          body.statements << return_last
+        end
       end
 
       def class_decl
@@ -272,24 +285,13 @@ module FastRuby
         method_visitor.start
       end
 
-      def define_method
-        method_decl = ast.new_method_declaration
-
-        class_decl.body_declarations << method_decl
-        method_decl.modifiers << ast.new_modifier(ModifierKeyword::PUBLIC_KEYWORD)
+      def define_args(method_decl)
+        arity = 0
 
         if node.kind_of? org.jruby.ast.DefnNode
           args_node = node.args_node.pre
           arity = args_node ? args_node.child_nodes.size : 0;
           args = args_node ? args_node.child_nodes : []
-          proper_name = safe_name(node.name)
-          class_visitor.compiler.methods[proper_name] = arity
-
-          robject_type = ast.new_simple_type(ast.new_simple_name("ROBject"))
-
-          unless proper_name == "initialize"
-            method_decl.return_type2 = robject_type
-          end
 
           args && args.each do |a|
             arg_decl = ast.new_single_variable_declaration
@@ -297,12 +299,9 @@ module FastRuby
             arg_decl.type = ast.new_simple_type(ast.new_simple_name("ROBject"))
             method_decl.parameters << arg_decl
           end
-        else
-          proper_name = node.cpath.name
-          class_visitor.compiler.methods[node.cpath.name] = 0
         end
 
-        method_decl.name = ast.new_simple_name(proper_name)
+        arity
       end
 
       def visitStrNode(node)
