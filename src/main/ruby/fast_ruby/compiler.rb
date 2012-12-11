@@ -68,6 +68,7 @@ module FastRuby
       methods.each do |name, arity|
         next if BUILTINS.include? name
         method_decl = ast.new_method_declaration
+
         method_decl.name = ast.new_simple_name name
         method_decl.modifiers << ast.new_modifier(ModifierKeyword::PUBLIC_KEYWORD)
         method_decl.return_type2 = ast.new_simple_type(ast.new_simple_name("RObject"))

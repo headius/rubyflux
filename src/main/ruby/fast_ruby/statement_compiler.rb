@@ -22,11 +22,23 @@ module FastRuby
         expression = ExpressionCompiler.new(ast, body_compiler, node).start
 
         if expression
+          if Array === expression
+            type, expression = expression
+          end
+
           last_assignment = ast.new_assignment
           last_assignment.left_hand_side = ast.new_simple_name("$last")
           last_assignment.right_hand_side = expression
 
-          ast.new_expression_statement(last_assignment)
+          case type
+          when :return
+            body_compiler.body.statements << ast.new_expression_statement(last_assignment)
+            ast.new_return_statement.tap do |return_stmt|
+              return_stmt.expression = ast.new_name('$last')
+            end
+          else
+            ast.new_expression_statement(last_assignment)
+          end
         else
           ast.new_empty_statement
         end

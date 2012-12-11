@@ -48,17 +48,20 @@ module FastRuby
     end
 
     def visitCallNode(node)
-      class_compiler.compiler.methods[safe_name(node.name)] = node.args_node ? node.args_node.child_nodes.size : 0
-
       method_invocation = case node.name
       when "new"
         ast.new_class_instance_creation.tap do |construct|
-          construct.type = ast.new_simple_type(ast.new_simple_name(node.receiver_node.name))
+          construct.type = ast.new_simple_type(ast.new_simple_name(proper_class(node.receiver_node.name)))
         end
       else
         ast.new_method_invocation.tap do |method_invocation|
           method_invocation.name = ast.new_simple_name(safe_name(node.name))
-          method_invocation.expression = ExpressionCompiler.new(ast, body_compiler, node.receiver_node).start
+          if org.jruby.ast.ConstNode === node.receiver_node
+            method_invocation.expression = ast.new_name(proper_class(node.receiver_node.name))
+          else
+            class_compiler.compiler.methods[safe_name(node.name)] = node.args_node ? node.args_node.child_nodes.size : 0
+            method_invocation.expression = ExpressionCompiler.new(ast, body_compiler, node.receiver_node).start
+          end
         end
       end
         
@@ -166,13 +169,17 @@ module FastRuby
       conditional.expression = java_boolean
 
       if node.then_body
-        then_stmt = StatementCompiler.new(ast, body_compiler, node.then_body).start
-        conditional.then_statement = then_stmt
+        then_body_compiler = BodyCompiler.new(ast, method_compiler, node.then_body, false, false)
+        then_body_compiler.declared_vars = body_compiler.declared_vars
+        then_body_compiler.start
+        conditional.then_statement = then_body_compiler.body
       end
 
       if node.else_body
-        else_stmt = StatementCompiler.new(ast, body_compiler, node.else_body).start
-        conditional.else_statement = else_stmt
+        else_body_compiler = BodyCompiler.new(ast, method_compiler, node.else_body, false, false)
+        else_body_compiler.declared_vars = body_compiler.declared_vars
+        else_body_compiler.start
+        conditional.else_statement = else_body_compiler.body
       end
 
       body_compiler.body.statements << conditional
@@ -237,6 +244,12 @@ module FastRuby
       nil_expression
     end
 
+    def visitReturnNode(node)
+      return_expr = ExpressionCompiler.new(ast, body_compiler, node.value_node).start
+
+      [:return, return_expr]
+    end
+
     def safe_name(name)
       new_name = ''
 
@@ -262,6 +275,27 @@ module FastRuby
       end
 
       new_name
+    end
+
+    def proper_class(name)
+      case name
+      when 'String'
+        'RString'
+      when 'Array'
+        'RArray'
+      when 'Fixnum'
+        'RFixnum'
+      when 'Boolean'
+        'RBoolean'
+      when 'Float'
+        'RFloat'
+      when 'Time'
+        'RTime'
+      when 'Object'
+        'RObject'
+      else
+        name
+      end
     end
   end
 end

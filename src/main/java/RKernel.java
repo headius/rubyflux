@@ -4,12 +4,18 @@ public class RKernel {
     public static final RObject RFalse = new RBoolean(false);
 
     public RObject puts(RObject... objects) {
-        for (RObject object : objects) System.out.println(object);
+        if (objects.length == 0) {
+            System.out.println();
+        } else {
+            for (RObject object : objects) {
+                System.out.println(object.to_s());
+            }
+        }
         return RNil;
     }
 
     public RObject print(RObject object) {
-        System.out.print(object);
+        System.out.print(object.to_s());
         return RNil;
     }
 
@@ -31,6 +37,10 @@ public class RKernel {
 
     public RObject to_s() {
         return new RString("#<" + getClass().getName() + ">");
+    }
+    
+    public Object to_java() {
+        return this;
     }
 
     public String toString() {

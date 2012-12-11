@@ -20,5 +20,17 @@ public class RString extends RObject implements CharSequence {
     public CharSequence subSequence(int start, int end) {
         return str.subSequence(start, end);
     }
+    
+    public RObject to_s() {
+        return this;
+    }
+    
+    public Object to_java() {
+        return str;
+    }
+    
+    public RObject $percent(RObject arg) {
+        return new RString(String.format(str, arg.to_java()));
+    }
 
 }

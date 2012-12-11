@@ -11,7 +11,7 @@ require 'fast_ruby/statement_compiler'
 require 'fast_ruby/expression_compiler'
 
 module FastRuby
-  BUILTINS = %w[puts]
+  BUILTINS = %w[puts print]
 
   Char = java.lang.Character
   java_import org.eclipse.jdt.core.dom.AST
@@ -30,6 +30,7 @@ module FastRuby
     RString.java
     RFloat.java
     RArray.java
+    RTime.java
   ]
 end
 

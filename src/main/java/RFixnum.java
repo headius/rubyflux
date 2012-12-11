@@ -14,6 +14,10 @@ public class RFixnum extends RObject {
     public RObject to_i() {
         return this;
     }
+    
+    public Object to_java() {
+        return fix;
+    }
 
     public RObject $plus(RObject other) {
         if (other instanceof RFloat) {

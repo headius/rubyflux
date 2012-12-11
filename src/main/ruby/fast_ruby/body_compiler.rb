@@ -19,8 +19,8 @@ module FastRuby
         body.statements << last_var_assign
       end
 
-      children = defined?(node.child_nodes) ? node.child_nodes : node
-      children && children.each do |child_node|
+      children = org.jruby.ast.BlockNode == node ? node.child_nodes : [node]
+      children.each do |child_node|
         statement = StatementCompiler.new(ast, self, child_node).start
 
         body.statements << statement if statement

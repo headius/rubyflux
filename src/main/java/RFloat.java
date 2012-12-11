@@ -16,6 +16,10 @@ public class RFloat extends RObject {
     public RObject to_f() {
         return this;
     }
+    
+    public Object to_java() {
+        return flo;
+    }
 
     public RObject $plus(RObject other) {
         if (other instanceof RFixnum) {
@@ -104,6 +108,4 @@ public class RFloat extends RObject {
             return flo <= ((RFloat)other.to_f()).flo ? RTrue : RFalse;
         }
     }
-
-    
 }
