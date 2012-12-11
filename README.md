@@ -1,7 +1,7 @@
 FastRuby: a Ruby to Java compiler
 ----------------------------------
 
-FasatRuby is a compiler that turns a Ruby codebase into a closed set of .java
+FastRuby is a compiler that turns a Ruby codebase into a closed set of .java
 source files suitable for running on any JVM with no additional runtime
 requirement.
 
