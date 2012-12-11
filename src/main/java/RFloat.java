@@ -48,12 +48,28 @@ public class RFloat extends RObject {
             return new RFloat(flo * ((RFloat)other.to_f()).flo);
         }
     }
+    
+    public RObject $times$times(RObject other) {
+        if (other instanceof RFixnum) {
+            return new RFloat(Math.pow(flo, ((RFixnum)other).fix));
+        } else {
+            return new RFloat(Math.pow(flo, ((RFloat)other.to_f()).flo));
+        }
+    }
 
     public RObject $equal$equal(RObject other) {
         if (other instanceof RFixnum) {
             return flo == ((RFixnum)other).fix ? RTrue : RFalse;
         } else {
             return flo == ((RFloat)other.to_f()).flo ? RTrue : RFalse;
+        }
+    }
+
+    public RObject $less$equal$greater(RObject other) {
+        if (other instanceof RFixnum) {
+            return new RFixnum(Double.compare(flo, ((RFixnum)other).fix));
+        } else {
+            return new RFloat(Double.compare(flo, ((RFloat)other.to_f()).flo));
         }
     }
 

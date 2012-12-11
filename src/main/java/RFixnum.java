@@ -1,3 +1,6 @@
+
+import java.math.BigInteger;
+
 public class RFixnum extends RObject {
     public final long fix;
     public RFixnum(long fix) {
@@ -46,9 +49,9 @@ public class RFixnum extends RObject {
     
     public RObject $times$times(RObject other) {
         if (other instanceof RFloat) {
-            return new RFloat(fix * ((RFloat)other).flo);
+            return new RFloat(Math.pow(fix, ((RFloat)other).flo));
         } else {
-            return new RFixnum(fix * ((RFixnum)other.to_i()).fix);
+            return new RFixnum(new BigInteger(Long.toString(fix)).pow((int)((RFixnum)other.to_i()).fix).longValue());
         }
     }
 
@@ -57,6 +60,14 @@ public class RFixnum extends RObject {
             return fix == ((RFloat)other).flo ? RTrue : RFalse;
         } else {
             return fix == ((RFixnum)other.to_i()).fix ? RTrue : RFalse;
+        }
+    }
+
+    public RObject $less$equal$greater(RObject other) {
+        if (other instanceof RFloat) {
+            return new RFixnum(Long.compare(fix, (long)((RFloat)other).flo));
+        } else {
+            return new RFixnum(Long.compare(fix, ((RFixnum)other.to_i()).fix));
         }
     }
 
