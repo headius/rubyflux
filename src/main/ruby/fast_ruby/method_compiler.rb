@@ -50,7 +50,7 @@ module FastRuby
       class_decl.body_declarations << ruby_method
       ruby_method.modifiers << ast.new_modifier(ModifierKeyword::PUBLIC_KEYWORD)
 
-      body = BodyCompiler.new(ast, self, node.body_node, do_return).start
+      body = BodyCompiler.new(ast, self, node.body_node, true, do_return).start
 
       ruby_method.body = body
 

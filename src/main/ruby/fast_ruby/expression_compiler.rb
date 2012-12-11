@@ -44,7 +44,7 @@ module FastRuby
       new_class_compiler = ClassCompiler.new(class_compiler.compiler, new_ast, source, node.cpath.name, node)
       new_class_compiler.start
 
-      empty_expression
+      nil_expression
     end
 
     def visitCallNode(node)
@@ -97,7 +97,7 @@ module FastRuby
       method_compiler = MethodCompiler.new(ast, class_compiler, node)
       method_compiler.start
 
-      empty_expression
+      nil_expression
     end
 
     def visitStrNode(node)
@@ -177,7 +177,7 @@ module FastRuby
 
       body_compiler.body.statements << conditional
 
-      nil
+      nil_expression
     end
 
     def visitZArrayNode(node)
@@ -212,6 +212,29 @@ module FastRuby
 
     def visitConstNode(node)
       ast.new_qualified_name(ast.new_simple_name(class_compiler.class_name), ast.new_simple_name(node.name))
+    end
+
+    def visitWhileNode(node)
+      ast.new_while_statement.tap do |while_stmt|
+        condition_expr = ExpressionCompiler.new(ast, body_compiler, node.condition_node).start
+        java_boolean = ast.new_method_invocation
+        java_boolean.expression = condition_expr
+        java_boolean.name = ast.new_simple_name("toBoolean")
+
+        while_stmt.expression = java_boolean
+
+        if node.body_node
+          new_body_compiler = BodyCompiler.new(ast, method_compiler, node.body_node, false, false)
+          new_body_compiler.declared_vars = body_compiler.declared_vars
+          new_body_compiler.start
+
+          while_stmt.body = new_body_compiler.body
+        end
+
+        body_compiler.body.statements << while_stmt
+      end
+
+      nil_expression
     end
 
     def safe_name(name)
