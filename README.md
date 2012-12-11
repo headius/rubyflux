@@ -1,7 +1,7 @@
-TurboRuby: a Ruby to Java compiler
+FastRuby: a Ruby to Java compiler
 ----------------------------------
 
-TurboRuby is a compiler that turns a Ruby codebase into a closed set of .java
+FasatRuby is a compiler that turns a Ruby codebase into a closed set of .java
 source files suitable for running on any JVM with no additional runtime
 requirement.
 
@@ -14,7 +14,7 @@ in Java code.
 Usage
 =====
 
-Here's an example session for using TurboRuby today:
+Here's an example session for using FastRuby today:
 
 ```
 # First need to build the compiler's jar
@@ -25,7 +25,7 @@ $ mvn package
 $ jruby -I target src/main/ruby/compiler.rb -e "def fib(a); a < 2 ? a : fib(a - 1) + fib(a - 2); end; puts fib(40)"
 
 # The Ruby sources are translated to .java and all support code is copied out
-# of TurboRuby for the compilation step.
+# of FastRuby for the compilation step.
 #
 # A -e argument will produce a DashE.java file. A list of sources will produce
 # a .java file for each.
