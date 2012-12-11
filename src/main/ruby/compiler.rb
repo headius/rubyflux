@@ -212,9 +212,10 @@ module FastRuby
 
       def initialize(ast, class_compiler, node)
         @ast, @class_compiler, @node = ast, class_compiler, node
+        @argument_names = []
       end
 
-      attr_accessor :ast, :class_compiler, :node, :body
+      attr_accessor :ast, :class_compiler, :node, :body, :argument_names
 
       def start
         do_return = false
@@ -277,6 +278,7 @@ module FastRuby
           args = args_node ? args_node.child_nodes : []
 
           args && args.each do |a|
+            argument_names << a.name
             arg_decl = ast.new_single_variable_declaration
             arg_decl.name = ast.new_simple_name(a.name)
             arg_decl.type = ast.new_simple_type(ast.new_simple_name("RObject"))
@@ -307,9 +309,10 @@ module FastRuby
     class BodyCompiler
       def initialize(ast, method_compiler, node, do_return)
         @ast, @method_compiler, @node, @do_return = ast, method_compiler, node, do_return
+        @declared_vars = method_compiler.argument_names.dup
       end
 
-      attr_accessor :ast, :method_compiler, :node, :body, :do_return
+      attr_accessor :ast, :method_compiler, :node, :body, :do_return, :declared_vars
 
       def start
         @body = ast.new_block
@@ -495,6 +498,26 @@ module FastRuby
 
       def visitLocalVarNode(node)
         ast.new_name(node.name)
+      end
+
+      def visitLocalAsgnNode(node)
+        unless body_compiler.declared_vars.include? node.name
+          body_compiler.declared_vars << node.name
+          var = ast.new_variable_declaration_fragment
+          var.name = ast.new_simple_name(node.name)
+        
+          var.initializer = ast.new_name("RNil")
+          var_assign = ast.new_variable_declaration_statement(var)
+          var_assign.type = ast.new_simple_type(ast.new_simple_name("RObject"))
+
+          body_compiler.body.statements << var_assign
+        end
+
+        var_assign = ast.new_assignment
+        var_assign.left_hand_side = ast.new_name(node.name)
+        var_assign.right_hand_side = ExpressionCompiler.new(ast, body_compiler, node.value_node).start
+
+        var_assign
       end
 
       def visitIfNode(node)
