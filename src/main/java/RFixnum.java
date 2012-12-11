@@ -8,19 +8,71 @@ public class RFixnum extends RObject {
         return new RString(Long.toString(fix));
     }
 
-    public RObject to_int() {
+    public RObject to_i() {
         return this;
     }
 
-    public RObject _plus_(RObject other) {
-        return new RFixnum(fix + ((RFixnum)other.to_int()).fix);
+    public RObject $plus(RObject other) {
+        if (other instanceof RFloat) {
+            return new RFloat(fix + ((RFloat)other).flo);
+        } else {
+            return new RFixnum(fix + ((RFixnum)other.to_i()).fix);
+        }
     }
 
-    public RObject _minus_(RObject other) {
-        return new RFixnum(fix - ((RFixnum)other.to_int()).fix);
+    public RObject $minus(RObject other) {
+        if (other instanceof RFloat) {
+            return new RFloat(fix - ((RFloat)other).flo);
+        } else {
+            return new RFixnum(fix - ((RFixnum)other.to_i()).fix);
+        }
+    }
+    
+    public RObject $div(RObject other) {
+        if (other instanceof RFloat) {
+            return new RFloat(fix / ((RFloat)other).flo);
+        } else {
+            return new RFixnum(fix / ((RFixnum)other.to_i()).fix);
+        }
+    }
+    
+    public RObject $times(RObject other) {
+        if (other instanceof RFloat) {
+            return new RFloat(fix * ((RFloat)other).flo);
+        } else {
+            return new RFixnum(fix * ((RFixnum)other.to_i()).fix);
+        }
     }
 
-    public RObject _lt_(RObject other) {
-        return fix < ((RFixnum)other.to_int()).fix ? RTrue : RFalse;
+    public RObject $less(RObject other) {
+        if (other instanceof RFloat) {
+            return fix < ((RFloat)other).flo ? RTrue : RFalse;
+        } else {
+            return fix < ((RFixnum)other.to_i()).fix ? RTrue : RFalse;
+        }
+    }
+
+    public RObject $greater(RObject other) {
+        if (other instanceof RFloat) {
+            return fix > ((RFloat)other).flo ? RTrue : RFalse;
+        } else {
+            return fix > ((RFixnum)other.to_i()).fix ? RTrue : RFalse;
+        }
+    }
+
+    public RObject $less$equal(RObject other) {
+        if (other instanceof RFloat) {
+            return fix <= ((RFloat)other).flo ? RTrue : RFalse;
+        } else {
+            return fix <= ((RFixnum)other.to_i()).fix ? RTrue : RFalse;
+        }
+    }
+
+    public RObject $greater$equal(RObject other) {
+        if (other instanceof RFloat) {
+            return fix >= ((RFloat)other).flo ? RTrue : RFalse;
+        } else {
+            return fix >= ((RFixnum)other.to_i()).fix ? RTrue : RFalse;
+        }
     }
 }

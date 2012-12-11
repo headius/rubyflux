@@ -8,8 +8,16 @@ public class RKernel {
         return RNil;
     }
 
+    public RObject to_i() {
+        throw new RuntimeException("can't convert to Fixnum: " + getClass().getName());
+    }
+    
     public RObject to_int() {
-        throw new RuntimeException("can't convert to Integer: " + getClass().getName());
+        return to_i();
+    }
+
+    public RObject to_f() {
+        throw new RuntimeException("can't convert to Float: " + getClass().getName());
     }
 
     public RObject to_s() {

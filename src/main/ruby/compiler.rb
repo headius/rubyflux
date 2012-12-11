@@ -21,6 +21,7 @@ module FastRuby
     RFixnum.java
     RBoolean.java
     RString.java
+    RFloat.java
   ]
 
   module JDTUtils
@@ -476,6 +477,13 @@ module FastRuby
         end
       end
 
+      def visitFloatNode(node)
+        ast.new_class_instance_creation.tap do |construct|
+          construct.type = ast.new_simple_type(ast.new_simple_name("RFloat"))
+          construct.arguments << ast.new_number_literal(node.value.to_s)
+        end
+      end
+
       def visitNewlineNode(node)
         node.next_node.accept(self)
       end
@@ -525,19 +533,27 @@ module FastRuby
 =end
 
       def safe_name(name)
-        case name
-          when '+'; '_plus_'
-          when '-'; '_minus_'
-          when '*'; '_times_'
-          when '/'; '_divide_'
-          when '<'; '_lt_'
-          when '>'; '_gt_'
-          when '<='; '_le_'
-          when '>='; '_ge_'
-          when '=='; '_equal_'
-          when '<=>'; '_cmp_'
-          else; name
+        new_name = ''
+        name.chars.each do |ch|
+          new_name << case name
+            when '+'; '$plus'
+            when '-'; '$minus'
+            when '*'; '$times'
+            when '/'; '$div'
+            when '<'; '$less'
+            when '>'; '$greater'
+            when '='; '$equal'
+            when '&'; '$tilde'
+            when '!'; '$bang'
+            when '%'; '$percent'
+            when '^'; '$up'
+            when '?'; '$qmark'
+            when '|'; '$bar'
+            else; ch
+          end
         end
+
+        new_name
       end
     end
   end
