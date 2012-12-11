@@ -400,12 +400,12 @@ module FastRuby
         else
           ast.new_method_invocation.tap do |method_invocation|
             method_invocation.name = ast.new_simple_name(safe_name(node.name))
-            method_invocation.expression = ExpressionCompiler.new(ast, method_compiler, node.receiver_node).start
+            method_invocation.expression = ExpressionCompiler.new(ast, body_compiler, node.receiver_node).start
           end
         end
           
         node.args_node && node.args_node.child_nodes.each do |arg|
-          arg_expression = ExpressionCompiler.new(ast, method_compiler, arg).start
+          arg_expression = ExpressionCompiler.new(ast, body_compiler, arg).start
           method_invocation.arguments << arg_expression
         end
 
@@ -420,7 +420,7 @@ module FastRuby
           method_invocation.expression = ast.new_this_expression
           
           node.args_node && node.args_node.child_nodes.each do |arg|
-            arg_expression = ExpressionCompiler.new(ast, method_compiler, arg).start
+            arg_expression = ExpressionCompiler.new(ast, body_compiler, arg).start
             method_invocation.arguments << arg_expression
           end
         end
@@ -452,7 +452,10 @@ module FastRuby
       end
 
       def visitFixnumNode(node)
-        ast.new_number_literal(node.value.to_s)
+        ast.new_class_instance_creation.tap do |construct|
+          construct.type = ast.new_simple_type(ast.new_simple_name("RFixnum"))
+          construct.arguments << ast.new_number_literal(node.value.to_s + "L")
+        end
       end
 
       def visitNewlineNode(node)
@@ -470,7 +473,7 @@ module FastRuby
       def visitIfNode(node)
         conditional = ast.new_if_statement
         
-        condition_expr = ExpressionCompiler.new(ast, method_compiler, node.condition).start
+        condition_expr = ExpressionCompiler.new(ast, body_compiler, node.condition).start
         java_boolean = ast.new_method_invocation
         java_boolean.expression = condition_expr
         java_boolean.name = ast.new_simple_name("toBoolean")
