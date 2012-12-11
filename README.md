@@ -20,9 +20,9 @@ Here's an example session for using FastRuby today:
 # First need to build the compiler's jar
 $ mvn package
 
-# Provide the target dir to JRuby's -I flag along with -e or a group of files
+# Provide the target and src dirs to -I flag along with -e or a group of files
 # to compile
-$ jruby -I target src/main/ruby/compiler.rb -e "def fib(a); a < 2 ? a : fib(a - 1) + fib(a - 2); end; puts fib(40)"
+$ jruby -I target:src/main/ruby src/main/ruby/fast_ruby.rb -e "def fib(a); a < 2 ? a : fib(a - 1) + fib(a - 2); end; puts fib(40)"
 
 # The Ruby sources are translated to .java and all support code is copied out
 # of FastRuby for the compilation step.
