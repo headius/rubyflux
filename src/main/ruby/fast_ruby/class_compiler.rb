@@ -11,12 +11,12 @@ module FastRuby
     end
 
     attr_accessor :compiler, :ast, :source
-    attr_accessor :class_decl
+    attr_accessor :class_decl, :class_name
 
     def start
 	@class_decl = ast.new_type_declaration
 	class_decl.interface = false
-      class_decl.modifiers << ast.new_modifier(ModifierKeyword::PUBLIC_KEYWORD)
+        class_decl.modifiers << ast.new_modifier(ModifierKeyword::PUBLIC_KEYWORD)
 	class_decl.name = ast.new_simple_name(@class_name)
 	class_decl.superclass_type = ast.new_simple_type(ast.new_simple_name("RObject"))
 

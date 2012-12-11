@@ -194,16 +194,25 @@ module FastRuby
       end
     end
 
-=begin
     def visitConstDeclNode(node)
-      #print "    #{node.name} = "
-      node.value_node.accept(self)
+      const_assign = ast.new_variable_declaration_fragment
+      const_assign.name = ast.new_simple_name(node.name)
+      const_assign.initializer = ExpressionCompiler.new(ast, body_compiler, node.value_node).start
+
+      declaration = ast.new_field_declaration(const_assign).tap do |decl|
+        decl.modifiers << ast.new_modifier(ModifierKeyword::PUBLIC_KEYWORD)
+        decl.modifiers << ast.new_modifier(ModifierKeyword::STATIC_KEYWORD)
+        decl.type = ast.new_simple_type(ast.new_simple_name('RObject'))
+      end
+
+      class_compiler.class_decl.body_declarations << declaration
+
+      ast.new_name(node.name)
     end
 
     def visitConstNode(node)
-      #print node.name
+      ast.new_qualified_name(ast.new_simple_name(class_compiler.class_name), ast.new_simple_name(node.name))
     end
-=end
 
     def safe_name(name)
       new_name = ''
