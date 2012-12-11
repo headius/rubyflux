@@ -18,7 +18,7 @@ module FastRuby
       when org.jruby.ast.RootNode
         # no name; it's the main body of a script
         ruby_method = ast.new_method_declaration
-        ruby_method.name = ast.new_simple_name "_main_"
+        ruby_method.name = ast.new_simple_name "$main"
 
         body_node = node
       when org.jruby.ast.ClassNode

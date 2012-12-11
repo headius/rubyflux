@@ -53,7 +53,7 @@ module FastRuby
 
       body = ast.new_block
       main_call = ast.new_method_invocation
-      main_call.name = ast.new_simple_name("_main_")
+      main_call.name = ast.new_simple_name("$main")
       new_obj = ast.new_class_instance_creation
       new_obj.type = ast.new_simple_type(ast.new_simple_name(@class_name))
       main_call.expression = new_obj
