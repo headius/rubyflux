@@ -1,7 +1,7 @@
-require 'pp'
 require 'jruby'
 require 'java'
 require 'fastruby-1.0-SNAPSHOT.jar'
+require 'fileutils'
 
 module FastRuby
   BUILTINS = %w[puts]
@@ -15,6 +15,13 @@ module FastRuby
   ModifierKeyword = Modifier::ModifierKeyword
   java_import org.eclipse.jdt.core.JavaCore
   java_import org.eclipse.jdt.core.formatter.DefaultCodeFormatterConstants
+
+  COPIED_SOURCES = %w[
+    RKernel.java
+    RFixnum.java
+    RBoolean.java
+    RString.java
+  ]
 
   module JDTUtils
     def source_to_document(source)
@@ -66,8 +73,6 @@ module FastRuby
 
           ClassCompiler.new(self, jdt_ast, source, File.basename(file).split('.')[0], ast).start
         end
-
-        build_robject
       else
         ast = JRuby.parse(@source)
 
@@ -79,8 +84,19 @@ module FastRuby
         ClassCompiler.new(self, jdt_ast, source, "DashE", ast).start
       end
 
+      build_robject
+
+      # all generated sources
       sources.each do |source|
-        puts source_to_document(source).get
+        type = source.types[0]
+        File.open(type.name.to_s + ".java", 'w') do |file|
+          file.write(source_to_document(source).get)
+        end
+      end
+
+      # all copied sources
+      COPIED_SOURCES.each do |srcname|
+        FileUtils.cp(File.join('src/main/java', srcname), ".")
       end
     end
 
@@ -98,12 +114,14 @@ module FastRuby
       source.types << robject_cls
 
       methods.each do |name, arity|
+        next if BUILTINS.include? name
         method_decl = ast.new_method_declaration
         method_decl.name = ast.new_simple_name name
         method_decl.modifiers << ast.new_modifier(ModifierKeyword::PUBLIC_KEYWORD)
+        method_decl.return_type2 = ast.new_simple_type(ast.new_simple_name("RObject"))
 
         if arity > 0
-          (0..arity).each do |i|
+          (0...arity).each do |i|
             arg = ast.new_single_variable_declaration
             arg.name = ast.new_simple_name("arg%02d" % i)
             arg.type = ast.new_simple_type(ast.new_simple_name("RObject"))
@@ -139,14 +157,13 @@ module FastRuby
       def start
 	@class_decl = ast.new_type_declaration
 	class_decl.interface = false
+        class_decl.modifiers << ast.new_modifier(ModifierKeyword::PUBLIC_KEYWORD)
 	class_decl.name = ast.new_simple_name(@class_name)
 	class_decl.superclass_type = ast.new_simple_type(ast.new_simple_name("RObject"))
 
 	source.types << class_decl
 
         define_main
-
-        define_constructor
 
 	MethodCompiler.new(ast, self, @node).start
       end
@@ -205,7 +222,6 @@ module FastRuby
           # no name; it's the main body of a script
           ruby_method = ast.new_method_declaration
           ruby_method.name = ast.new_simple_name "_main_"
-          ruby_method.return_type2 = ast.new_simple_type(ast.new_simple_name("RObject"))
 
           body_node = node
         when org.jruby.ast.ClassNode
@@ -224,7 +240,7 @@ module FastRuby
 
           ruby_method.name = ast.new_simple_name proper_name
 
-          robject_type = ast.new_simple_type(ast.new_simple_name("ROBject"))
+          robject_type = ast.new_simple_type(ast.new_simple_name("RObject"))
 
           unless proper_name == "initialize"
             ruby_method.return_type2 = robject_type
@@ -240,6 +256,10 @@ module FastRuby
         body = BodyCompiler.new(ast, self, node.body_node, do_return).start
 
         ruby_method.body = body
+
+        if proper_name == "initialize"
+          class_compiler.define_constructor
+        end
       end
 
       def class_decl
@@ -257,7 +277,7 @@ module FastRuby
           args && args.each do |a|
             arg_decl = ast.new_single_variable_declaration
             arg_decl.name = ast.new_simple_name(a.name)
-            arg_decl.type = ast.new_simple_type(ast.new_simple_name("ROBject"))
+            arg_decl.type = ast.new_simple_type(ast.new_simple_name("RObject"))
             method_decl.parameters << arg_decl
           end
         end
@@ -291,14 +311,12 @@ module FastRuby
 
       def start
         @body = ast.new_block
-        last_var = ast.new_single_variable_declaration
+        last_var = ast.new_variable_declaration_fragment
         last_var.name = ast.new_simple_name("$last")
-        last_var.type = ast.new_simple_type(ast.new_simple_name("ROBject"))
-        nil_load = ast.new_name("RNil")
-        last_assignment = ast.new_assignment
-        last_assignment.left_hand_side = ast.new_simple_name("$last")
-        last_assignment.right_hand_side = nil_load
-        body.statements << ast.new_expression_statement(last_assignment)
+        last_var.initializer = ast.new_name("RNil")
+        last_var_assign = ast.new_variable_declaration_statement(last_var)
+        last_var_assign.type = ast.new_simple_type(ast.new_simple_name("RObject"))
+        body.statements << last_var_assign
 
         children = defined?(node.child_nodes) ? node.child_nodes : node
         children && children.each do |child_node|
