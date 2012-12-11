@@ -44,7 +44,7 @@ module FastRuby
       new_class_compiler = ClassCompiler.new(class_compiler.compiler, new_ast, source, node.cpath.name, node)
       new_class_compiler.start
 
-      nil_expression
+      nil
     end
 
     def visitCallNode(node)
@@ -100,7 +100,7 @@ module FastRuby
       method_compiler = MethodCompiler.new(ast, class_compiler, node)
       method_compiler.start
 
-      nil_expression
+      nil
     end
 
     def visitStrNode(node)
@@ -139,18 +139,6 @@ module FastRuby
     end
 
     def visitLocalAsgnNode(node)
-      unless body_compiler.declared_vars.include? node.name
-        body_compiler.declared_vars << node.name
-        var = ast.new_variable_declaration_fragment
-        var.name = ast.new_simple_name(node.name)
-      
-        var.initializer = ast.new_name("RNil")
-        var_assign = ast.new_variable_declaration_statement(var)
-        var_assign.type = ast.new_simple_type(ast.new_simple_name("RObject"))
-
-        body_compiler.body.statements << var_assign
-      end
-
       var_assign = ast.new_assignment
       var_assign.left_hand_side = ast.new_name(node.name)
       var_assign.right_hand_side = ExpressionCompiler.new(ast, body_compiler, node.value_node).start
@@ -170,14 +158,12 @@ module FastRuby
 
       if node.then_body
         then_body_compiler = BodyCompiler.new(ast, method_compiler, node.then_body, false, false)
-        then_body_compiler.declared_vars = body_compiler.declared_vars
         then_body_compiler.start
         conditional.then_statement = then_body_compiler.body
       end
 
       if node.else_body
         else_body_compiler = BodyCompiler.new(ast, method_compiler, node.else_body, false, false)
-        else_body_compiler.declared_vars = body_compiler.declared_vars
         else_body_compiler.start
         conditional.else_statement = else_body_compiler.body
       end
@@ -202,11 +188,11 @@ module FastRuby
     end
 
     def visitConstDeclNode(node)
-      const_assign = ast.new_variable_declaration_fragment
-      const_assign.name = ast.new_simple_name(node.name)
-      const_assign.initializer = ExpressionCompiler.new(ast, body_compiler, node.value_node).start
+      nil_fragment = ast.new_variable_declaration_fragment
+      nil_fragment.name = ast.new_simple_name(node.name)
+      nil_fragment.initializer = ast.new_name('RNil')
 
-      declaration = ast.new_field_declaration(const_assign).tap do |decl|
+      declaration = ast.new_field_declaration(nil_fragment).tap do |decl|
         decl.modifiers << ast.new_modifier(ModifierKeyword::PUBLIC_KEYWORD)
         decl.modifiers << ast.new_modifier(ModifierKeyword::STATIC_KEYWORD)
         decl.type = ast.new_simple_type(ast.new_simple_name('RObject'))
@@ -214,7 +200,11 @@ module FastRuby
 
       class_compiler.class_decl.body_declarations << declaration
 
-      ast.new_name(node.name)
+      const_asgn = ast.new_assignment
+      const_asgn.left_hand_side = visitConstNode(node)
+      const_asgn.right_hand_side = ExpressionCompiler.new(ast, body_compiler, node.value_node).start
+
+      const_asgn
     end
 
     def visitConstNode(node)
@@ -232,7 +222,6 @@ module FastRuby
 
         if node.body_node
           new_body_compiler = BodyCompiler.new(ast, method_compiler, node.body_node, false, false)
-          new_body_compiler.declared_vars = body_compiler.declared_vars
           new_body_compiler.start
 
           while_stmt.body = new_body_compiler.body

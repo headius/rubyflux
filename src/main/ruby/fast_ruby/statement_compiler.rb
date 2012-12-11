@@ -15,7 +15,8 @@ module FastRuby
     def start
       if org.jruby.ast.BlockNode === node
         node.child_nodes.each do |line|
-          body_compiler.body.statements << StatementCompiler.new(ast, body_compiler, line).start
+          statement = StatementCompiler.new(ast, body_compiler, line).start
+          body_compiler.body.statements << statement if statement
         end
         ast.new_empty_statement
       else
@@ -40,7 +41,7 @@ module FastRuby
             ast.new_expression_statement(last_assignment)
           end
         else
-          ast.new_empty_statement
+          nil
         end
       end
     end

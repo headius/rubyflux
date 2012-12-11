@@ -4,7 +4,7 @@ BAILOUT = 16
 MAX_ITERATIONS = 1000
 
 def fractal
-		puts "Rendering"
+  puts "Rendering"
   y = -39
   while y <= 39
     puts
