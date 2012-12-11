@@ -1,6 +1,5 @@
 class Hello
   def initialize
-
   end
 
   def hello_world
@@ -16,3 +15,5 @@ class Hello
     end
   end
 end
+
+Hello.new.hello_world

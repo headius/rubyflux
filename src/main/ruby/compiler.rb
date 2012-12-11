@@ -1,3 +1,4 @@
+require 'pp'
 require 'jruby'
 require 'java'
 require 'fastruby-1.0-SNAPSHOT.jar'
@@ -18,7 +19,9 @@ module FastRuby
   module JDTUtils
     def source_to_document(source)
       document = Document.new
+
       options = JavaCore.options
+
       options[DefaultCodeFormatterConstants::FORMATTER_INDENTATION_SIZE] = '4'
       options[DefaultCodeFormatterConstants::FORMATTER_TAB_CHAR] = 'space'
       options[DefaultCodeFormatterConstants::FORMATTER_TAB_SIZE] = '4'
@@ -42,8 +45,9 @@ module FastRuby
   class Compiler
     include JDTUtils
 
-    def initialize(files)
+    def initialize(files, source = nil)
       @files = files
+      @source = source
       @sources = []
       @methods = {}
     end
@@ -51,19 +55,29 @@ module FastRuby
     attr_accessor :sources, :methods
 
     def compile
-      @files.each do |file|
-        ast = JRuby.parse(File.read(file))
+      if !@source
+        @files.each do |file|
+          ast = JRuby.parse(File.read(file))
+
+          source = new_source
+          sources << source
+
+          jdt_ast = source.ast
+
+          ClassCompiler.new(self, jdt_ast, source, File.basename(file).split('.')[0], ast).start
+        end
+
+        build_robject
+      else
+        ast = JRuby.parse(@source)
 
         source = new_source
         sources << source
 
         jdt_ast = source.ast
 
-        @visitor = ClassVisitor.new(self, jdt_ast, source, File.basename(file).split('.')[0], ast)
-        @visitor.start
+        ClassCompiler.new(self, jdt_ast, source, "DashE", ast).start
       end
-
-      build_robject
 
       sources.each do |source|
         puts source_to_document(source).get
@@ -110,10 +124,8 @@ module FastRuby
       end
     end
 
-    class ClassVisitor
+    class ClassCompiler
       include JDTUtils
-
-      include org.jruby.ast.visitor.NodeVisitor
 
       def initialize(compiler, ast, source, class_name, node)
         @compiler, @ast, @source, @class_name, @node = compiler, ast, source, class_name, node
@@ -134,8 +146,23 @@ module FastRuby
 
         define_main
 
-	@method_visitor = MethodVisitor.new(ast, self, @node)
-	@method_visitor.start
+        define_constructor
+
+	MethodCompiler.new(ast, self, @node).start
+      end
+
+      def define_constructor
+        construct = ast.new_method_declaration
+        construct.name = ast.new_simple_name(@class_name)
+        construct.constructor = true
+        
+        construct.body = ast.new_block.tap do |body|
+          initialize_call = ast.new_method_invocation
+          initialize_call.name = ast.new_simple_name("initialize")
+          body.statements << ast.new_expression_statement(initialize_call)
+        end
+
+        class_decl.body_declarations << construct
       end
 
       def define_main
@@ -161,20 +188,14 @@ module FastRuby
       end
     end
 
-    class MethodVisitor
+    class MethodCompiler
       include JDTUtils
 
-      include org.jruby.ast.visitor.NodeVisitor
-
-      def initialize(ast, class_visitor, node)
-        @ast, @class_visitor, @node = ast, class_visitor, node
+      def initialize(ast, class_compiler, node)
+        @ast, @class_compiler, @node = ast, class_compiler, node
       end
 
-      attr_accessor :ast, :class_visitor, :node, :body
-
-      def method_missing(name, node)
-        node.child_nodes.each {|n| n.accept self}
-      end
+      attr_accessor :ast, :class_compiler, :node, :body
 
       def start
         do_return = false
@@ -199,7 +220,7 @@ module FastRuby
           arity = define_args(ruby_method)
 
           proper_name = safe_name(node.name)
-          class_visitor.compiler.methods[proper_name] = arity
+          class_compiler.compiler.methods[proper_name] = arity
 
           ruby_method.name = ast.new_simple_name proper_name
 
@@ -216,13 +237,13 @@ module FastRuby
         class_decl.body_declarations << ruby_method
         ruby_method.modifiers << ast.new_modifier(ModifierKeyword::PUBLIC_KEYWORD)
 
-        body = BodyCompiler.new(ast, class_visitor, node.body_node, do_return).start
+        body = BodyCompiler.new(ast, self, node.body_node, do_return).start
 
         ruby_method.body = body
       end
 
       def class_decl
-        class_visitor.class_decl
+        class_compiler.class_decl
       end
 
       def define_args(method_decl)
@@ -262,23 +283,18 @@ module FastRuby
     end
 
     class BodyCompiler
-      def initialize(ast, class_visitor, node, do_return)
-        @ast, @class_visitor, @node, @do_return = ast, class_visitor, node, do_return
+      def initialize(ast, method_compiler, node, do_return)
+        @ast, @method_compiler, @node, @do_return = ast, method_compiler, node, do_return
       end
 
-      attr_accessor :ast, :class_visitor, :node, :body, :do_return
-
-      def method_missing(name, node)
-        node.child_nodes.each {|n| n.accept self}
-      end
+      attr_accessor :ast, :method_compiler, :node, :body, :do_return
 
       def start
-        body = ast.new_block
+        @body = ast.new_block
         last_var = ast.new_single_variable_declaration
         last_var.name = ast.new_simple_name("$last")
         last_var.type = ast.new_simple_type(ast.new_simple_name("ROBject"))
-        nil_load = ast.new_field_access
-        nil_load.name = ast.new_simple_name("RNil")
+        nil_load = ast.new_name("RNil")
         last_assignment = ast.new_assignment
         last_assignment.left_hand_side = ast.new_simple_name("$last")
         last_assignment.right_hand_side = nil_load
@@ -286,8 +302,9 @@ module FastRuby
 
         children = defined?(node.child_nodes) ? node.child_nodes : node
         children && children.each do |child_node|
-          statement = StatementCompiler.new(ast, class_visitor, child_node).start
-          body.statements << statement
+          statement = StatementCompiler.new(ast, self, child_node).start
+
+          body.statements << statement if statement
         end
 
         if do_return
@@ -305,18 +322,24 @@ module FastRuby
 
       include org.jruby.ast.visitor.NodeVisitor
 
-      def initialize(ast, class_visitor, node)
-        @ast, @class_visitor, @node = ast, class_visitor, node
+      def initialize(ast, body_compiler, node)
+        @ast, @body_compiler, @node = ast, body_compiler, node
       end
 
-      attr_accessor :ast, :class_visitor, :node
+      attr_accessor :ast, :body_compiler, :node
 
       def start
-        last_assignment = ast.new_assignment
-        last_assignment.left_hand_side = ast.new_simple_name("$last")
-        last_assignment.right_hand_side = ExpressionCompiler.new(ast, class_visitor, node).start
+        expression = ExpressionCompiler.new(ast, body_compiler, node).start
 
-        ast.new_expression_statement(last_assignment)
+        if expression
+          last_assignment = ast.new_assignment
+          last_assignment.left_hand_side = ast.new_simple_name("$last")
+          last_assignment.right_hand_side = expression
+
+          ast.new_expression_statement(last_assignment)
+        else
+          ast.new_empty_statement
+        end
       end
     end
 
@@ -325,11 +348,11 @@ module FastRuby
 
       include org.jruby.ast.visitor.NodeVisitor
 
-      def initialize(ast, class_visitor, node)
-        @ast, @class_visitor, @node = ast, class_visitor, node
+      def initialize(ast, body_compiler, node)
+        @ast, @body_compiler, @node = ast, body_compiler, node
       end
 
-      attr_accessor :ast, :class_visitor, :node
+      attr_accessor :ast, :body_compiler, :node
 
       def start
         expression = node.accept(self)
@@ -337,66 +360,100 @@ module FastRuby
         expression
       end
 
-      def nil_expression(*args)
-        last_value = ast.new_field_access
-        last_value.name = ast.new_simple_name('RNil')
+      def method_compiler
+        body_compiler.method_compiler
+      end
 
-        last_value
+      def class_compiler
+        method_compiler.class_compiler
+      end
+
+      def nil_expression(*args)
+        ast.new_name('RNil')
       end
       alias method_missing nil_expression
+
+      def empty_expression
+        nil
+      end
       
       def visitClassNode(node)
         source = new_source
-        class_visitor.compiler.sources << source
+        class_compiler.compiler.sources << source
 
         new_ast = source.ast
 
-        new_class_visitor = ClassVisitor.new(class_visitor.compiler, new_ast, source, node.cpath.name, node)
-        new_class_visitor.start
+        new_class_compiler = ClassCompiler.new(class_compiler.compiler, new_ast, source, node.cpath.name, node)
+        new_class_compiler.start
 
-        nil_expression
+        empty_expression
       end
 
-=begin
       def visitCallNode(node)
-        @methods[safe_name(node.name)] = node.args_node ? node.args_node.child_nodes.size : 0
-        node.receiver_node.accept(self)
-        print ".#{safe_name(node.name)}("
-        first = true
-        node.args_node.child_nodes.each {|n| print ", " unless first; first = false; n.accept self} if node.args_node
-        print ")"
+        class_compiler.compiler.methods[safe_name(node.name)] = node.args_node ? node.args_node.child_nodes.size : 0
+
+        method_invocation = case node.name
+        when "new"
+          ast.new_class_instance_creation.tap do |construct|
+            construct.type = ast.new_simple_type(ast.new_simple_name(node.receiver_node.name))
+          end
+        else
+          ast.new_method_invocation.tap do |method_invocation|
+            method_invocation.name = ast.new_simple_name(safe_name(node.name))
+            method_invocation.expression = ExpressionCompiler.new(ast, method_compiler, node.receiver_node).start
+          end
+        end
+          
+        node.args_node && node.args_node.child_nodes.each do |arg|
+          arg_expression = ExpressionCompiler.new(ast, method_compiler, arg).start
+          method_invocation.arguments << arg_expression
+        end
+
+        method_invocation
       end
 
       def visitFCallNode(node)
-        @methods[safe_name(node.name)] = node.args_node ? node.args_node.child_nodes.size : 0
-        print "#{safe_name(node.name)}("
-        first = true
-        node.args_node.child_nodes.each {|n| print ", " unless first; first = false; n.accept self} if node.args_node
-        print ")"
+        class_compiler.compiler.methods[safe_name(node.name)] = node.args_node ? node.args_node.child_nodes.size : 0
+
+        ast.new_method_invocation.tap do |method_invocation|
+          method_invocation.name = ast.new_simple_name(node.name)
+          method_invocation.expression = ast.new_this_expression
+          
+          node.args_node && node.args_node.child_nodes.each do |arg|
+            arg_expression = ExpressionCompiler.new(ast, method_compiler, arg).start
+            method_invocation.arguments << arg_expression
+          end
+        end
       end
 
       def visitVCallNode(node)
-        @methods[safe_name(node.name)] = 0
-        print "#{safe_name(node.name)}();"
+        class_compiler.compiler.methods[safe_name(node.name)] = 0
+
+        ast.new_method_invocation.tap do |method_invocation|
+          method_invocation.name = ast.new_simple_name(node.name)
+          method_invocation.expression = ast.new_this_expression
+        end
       end
-=end
 
       def visitDefnNode(node)
-        method_visitor = MethodVisitor.new(ast, class_visitor, node)
-        method_visitor.start
+        method_compiler = MethodCompiler.new(ast, class_compiler, node)
+        method_compiler.start
 
-        nil_expression
+        empty_expression
       end
 
-=begin
       def visitStrNode(node)
-        print "new RString(\"#{node.value}\")"
+        ast.new_class_instance_creation.tap do |construct|
+          construct.type = ast.new_simple_type(ast.new_simple_name("RString"))
+          construct.arguments << ast.new_string_literal.tap do |string_literal|
+            string_literal.literal_value = node.value.to_s
+          end
+        end
       end
 
       def visitFixnumNode(node)
-        print "new RFixnum(#{node.value})"
+        ast.new_number_literal(node.value.to_s)
       end
-=end
 
       def visitNewlineNode(node)
         node.next_node.accept(self)
@@ -406,23 +463,36 @@ module FastRuby
         nil_expression
       end
 
-=begin
-      def visitIfNode(node)
-        # print "if ("
-        node.condition.accept(self)
-        #print ".toBoolean()) {\n"
-        node.then_body.accept(self)
-        if node.else_body
-        #  print "} else {\n"
-          node.else_body.accept(self)
-        end
-        #print "}"
-      end
-
       def visitLocalVarNode(node)
-        #print node.name
+        ast.new_name(node.name)
       end
 
+      def visitIfNode(node)
+        conditional = ast.new_if_statement
+        
+        condition_expr = ExpressionCompiler.new(ast, method_compiler, node.condition).start
+        java_boolean = ast.new_method_invocation
+        java_boolean.expression = condition_expr
+        java_boolean.name = ast.new_simple_name("toBoolean")
+
+        conditional.expression = java_boolean
+
+        if node.then_body
+          then_stmt = StatementCompiler.new(ast, body_compiler, node.then_body).start
+          conditional.then_statement = then_stmt
+        end
+
+        if node.else_body
+          else_stmt = StatementCompiler.new(ast, body_compiler, node.else_body).start
+          conditional.else_statement = else_stmt
+        end
+
+        body_compiler.body.statements << conditional
+
+        nil
+      end
+
+=begin
       def visitConstDeclNode(node)
         #print "    #{node.name} = "
         node.value_node.accept(self)
@@ -453,5 +523,9 @@ module FastRuby
 end
 
 if __FILE__ == $0
-  FastRuby::Compiler.new(ARGV).compile
+  if ARGV[0] == '-e'
+    FastRuby::Compiler.new('-e', ARGV[1]).compile
+  else
+    FastRuby::Compiler.new(ARGV).compile
+  end
 end
