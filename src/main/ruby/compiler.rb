@@ -22,6 +22,7 @@ module FastRuby
     RBoolean.java
     RString.java
     RFloat.java
+    RArray.java
   ]
 
   module JDTUtils
@@ -521,6 +522,20 @@ module FastRuby
         nil
       end
 
+      def visitZArrayNode(node)
+        ast.new_class_instance_creation.tap do |ary|
+          ary.type = ast.new_simple_type(ast.new_simple_name('RArray'))
+        end
+      end
+
+      def visitArrayNode(node)
+        visitZArrayNode(node).tap do |ary|
+          node.child_nodes.each do |element|
+            ary.arguments << ExpressionCompiler.new(ast, body_compiler, element).start
+          end
+        end
+      end
+
 =begin
       def visitConstDeclNode(node)
         #print "    #{node.name} = "
@@ -534,8 +549,9 @@ module FastRuby
 
       def safe_name(name)
         new_name = ''
+
         name.chars.each do |ch|
-          new_name << case name
+          new_name << case ch
             when '+'; '$plus'
             when '-'; '$minus'
             when '*'; '$times'
@@ -549,7 +565,9 @@ module FastRuby
             when '^'; '$up'
             when '?'; '$qmark'
             when '|'; '$bar'
-            else; ch
+            when '['; '$lbrack'
+            when ']'; '$rbrack'
+            else; ch;
           end
         end
 

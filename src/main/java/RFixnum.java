@@ -65,9 +65,9 @@ public class RFixnum extends RObject {
 
     public RObject $less$equal$greater(RObject other) {
         if (other instanceof RFloat) {
-            return new RFixnum(Long.compare(fix, (long)((RFloat)other).flo));
+            return new RFixnum(Long.valueOf(fix).compareTo((long)((RFloat)other).flo));
         } else {
-            return new RFixnum(Long.compare(fix, ((RFixnum)other.to_i()).fix));
+            return new RFixnum(Long.valueOf(fix).compareTo(((RFixnum)other.to_i()).fix));
         }
     }
 
