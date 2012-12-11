@@ -43,6 +43,22 @@ public class RFixnum extends RObject {
             return new RFixnum(fix * ((RFixnum)other.to_i()).fix);
         }
     }
+    
+    public RObject $times$times(RObject other) {
+        if (other instanceof RFloat) {
+            return new RFloat(fix * ((RFloat)other).flo);
+        } else {
+            return new RFixnum(fix * ((RFixnum)other.to_i()).fix);
+        }
+    }
+
+    public RObject $equal$equal(RObject other) {
+        if (other instanceof RFloat) {
+            return fix == ((RFloat)other).flo ? RTrue : RFalse;
+        } else {
+            return fix == ((RFixnum)other.to_i()).fix ? RTrue : RFalse;
+        }
+    }
 
     public RObject $less(RObject other) {
         if (other instanceof RFloat) {

@@ -8,6 +8,15 @@ public class RKernel {
         return RNil;
     }
 
+    public RObject print(RObject object) {
+        System.out.print(object);
+        return RNil;
+    }
+
+    public RObject $equal$equal(RObject other) {
+        return this == other ? RTrue : RFalse;
+    }
+
     public RObject to_i() {
         throw new RuntimeException("can't convert to Fixnum: " + getClass().getName());
     }
