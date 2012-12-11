@@ -77,7 +77,7 @@ module FastRuby
       class_compiler.compiler.methods[safe_name(node.name)] = node.args_node ? node.args_node.child_nodes.size : 0
 
       ast.new_method_invocation.tap do |method_invocation|
-        method_invocation.name = ast.new_simple_name(node.name)
+        method_invocation.name = ast.new_simple_name(safe_name(node.name))
         method_invocation.expression = ast.new_this_expression
         
         node.args_node && node.args_node.child_nodes.each do |arg|
@@ -91,7 +91,7 @@ module FastRuby
       class_compiler.compiler.methods[safe_name(node.name)] = 0
 
       ast.new_method_invocation.tap do |method_invocation|
-        method_invocation.name = ast.new_simple_name(node.name)
+        method_invocation.name = ast.new_simple_name(safe_name(node.name))
         method_invocation.expression = ast.new_this_expression
       end
     end
