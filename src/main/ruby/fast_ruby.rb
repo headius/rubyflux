@@ -22,6 +22,8 @@ module FastRuby
   ModifierKeyword = Modifier::ModifierKeyword
   java_import org.eclipse.jdt.core.JavaCore
   java_import org.eclipse.jdt.core.formatter.DefaultCodeFormatterConstants
+  java_import org.eclipse.jdt.core.dom.InfixExpression
+  InfixOperator = InfixExpression::Operator
 
   COPIED_SOURCES = %w[
     RKernel.java
