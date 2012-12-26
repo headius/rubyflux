@@ -34,6 +34,10 @@ module FastRuby
     def empty_expression
       nil
     end
+
+    def last_expression
+      ast.new_name('$last')
+    end
     
     def visitAndNode(node)
       and_expr = ast.new_infix_expression
@@ -192,7 +196,7 @@ module FastRuby
 
       body_compiler.body.statements << conditional
 
-      nil_expression
+      last_expression
     end
 
     def visitLocalAsgnNode(node)
