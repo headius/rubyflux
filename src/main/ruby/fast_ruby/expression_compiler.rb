@@ -144,6 +144,10 @@ module FastRuby
       nil
     end
 
+    def visitFalseNode(node)
+      ast.new_name("RFalse")
+    end
+
     def visitFCallNode(node)
       class_compiler.compiler.methods[safe_name(node.name)] = node.args_node ? node.args_node.child_nodes.size : 0
 
@@ -253,6 +257,10 @@ module FastRuby
           string_literal.literal_value = node.value.to_s
         end
       end
+    end
+
+    def visitTrueNode(node)
+      ast.new_name("RTrue")
     end
 
     def visitVCallNode(node)
