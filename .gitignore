@@ -1,2 +1,6 @@
+dependency-reduced-pom.xml
+tags
 build
+target
 *.swp
+*.swo
