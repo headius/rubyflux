@@ -1,4 +1,4 @@
-module FastRuby
+module RubyFlux
   class BodyCompiler
     def initialize(ast, method_compiler, node, do_declare, do_return)
       @ast, @method_compiler, @node, @do_declare, @do_return = ast, method_compiler, node, do_declare, do_return

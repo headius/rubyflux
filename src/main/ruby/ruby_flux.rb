@@ -1,16 +1,16 @@
 require 'jruby'
 require 'java'
-require 'fastruby-1.0-SNAPSHOT.jar'
+require 'ruby_flux-1.0-SNAPSHOT.jar'
 require 'fileutils'
 
-require 'fast_ruby/compiler'
-require 'fast_ruby/class_compiler'
-require 'fast_ruby/method_compiler'
-require 'fast_ruby/body_compiler'
-require 'fast_ruby/statement_compiler'
-require 'fast_ruby/expression_compiler'
+require 'ruby_flux/compiler'
+require 'ruby_flux/class_compiler'
+require 'ruby_flux/method_compiler'
+require 'ruby_flux/body_compiler'
+require 'ruby_flux/statement_compiler'
+require 'ruby_flux/expression_compiler'
 
-module FastRuby
+module RubyFlux
   BUILTINS = %w[puts print]
 
   Char = java.lang.Character
@@ -38,8 +38,8 @@ end
 
 if __FILE__ == $0
   if ARGV[0] == '-e'
-    FastRuby::Compiler.new('-e', ARGV[1]).compile
+    RubyFlux::Compiler.new('-e', ARGV[1]).compile
   else
-    FastRuby::Compiler.new(ARGV).compile
+    RubyFlux::Compiler.new(ARGV).compile
   end
 end

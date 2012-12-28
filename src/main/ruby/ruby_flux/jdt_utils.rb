@@ -1,4 +1,4 @@
-module FastRuby
+module RubyFlux
   module JDTUtils
     def source_to_document(source)
       document = Document.new

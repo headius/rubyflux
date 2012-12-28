@@ -21,7 +21,7 @@ task :generate, [:file_name] => [:jruby_check] do |t, args|
   Dir.chdir("#{File.dirname(__FILE__)}")
   file_name = args[:file_name]
   raise "must specify file to generate" unless file_name && File.exists?(file_name)
-  sh "jruby -I target:src/main/ruby src/main/ruby/fast_ruby.rb #{file_name}"
+  sh "jruby -I target:src/main/ruby src/main/ruby/ruby_flux.rb #{file_name}"
 end
 
 desc "Compile the java source to bytecode"

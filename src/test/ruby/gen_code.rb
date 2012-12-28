@@ -1,4 +1,4 @@
-require 'fastruby-1.0-SNAPSHOT.jar'
+require 'ruby_flux-1.0-SNAPSHOT.jar'
 
 java_import org.eclipse.jdt.core.dom.AST
 java_import org.eclipse.jdt.core.dom.ASTParser

@@ -1,6 +1,6 @@
-require 'fast_ruby/jdt_utils'
+require 'ruby_flux/jdt_utils'
 
-module FastRuby
+module RubyFlux
   class ClassCompiler
     include JDTUtils
 
