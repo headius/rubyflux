@@ -85,12 +85,31 @@ module RubyFlux
         end
 
         body = ast.new_block
-        throw_statement = ast.new_throw_statement
-        expression = ast.new_class_instance_creation
-        expression.type = ast.new_simple_type(ast.new_simple_name("RuntimeException"))
-        expression.arguments << ast.new_string_literal.tap {|s| s.literal_value = name}
-        throw_statement.expression = expression
-        body.statements << throw_statement
+
+        method_missing = ast.new_method_invocation.tap do |method_invocation|
+          method_invocation.name = ast.new_simple_name("method_missing")
+
+          name_arg = ast.new_class_instance_creation.tap do |construct|
+            construct.type = ast.new_simple_type(ast.new_simple_name("RString"))
+            construct.arguments << ast.new_string_literal.tap do |string_literal|
+              string_literal.literal_value = name
+            end
+          end
+
+          method_invocation.arguments << name_arg
+          
+          (0...arity).each do |i|
+            arg = ast.new_name("arg%02d" % i)
+            method_invocation.arguments << arg
+          end
+        end
+
+        return_mm = ast.new_return_statement.tap do |return_stmt|
+          return_stmt.expression = method_missing
+        end
+
+        body.statements << return_mm
+
         method_decl.body = body
 
         robject_cls.body_declarations << method_decl
