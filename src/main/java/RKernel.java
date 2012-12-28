@@ -52,7 +52,7 @@ public class RKernel {
         return true;
     }
 
-    public RObject method_missing(RObject name, RObject... args) {
+    public RObject method_missing(RObject name, RObject args) {
         throw new RuntimeException("Method '" + name + "' not defined on type " + getClass().getName());
     }
 }

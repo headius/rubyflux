@@ -98,10 +98,15 @@ module RubyFlux
 
           method_invocation.arguments << name_arg
           
-          (0...arity).each do |i|
-            arg = ast.new_name("arg%02d" % i)
-            method_invocation.arguments << arg
+          ary_arg = ast.new_class_instance_creation.tap do |ary|
+            ary.type = ast.new_simple_type(ast.new_simple_name('RArray'))
+            (0...arity).each do |i|
+              arg = ast.new_name("arg%02d" % i)
+              ary.arguments << arg
+            end
           end
+
+          method_invocation.arguments << ary_arg
         end
 
         return_mm = ast.new_return_statement.tap do |return_stmt|
