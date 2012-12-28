@@ -17,23 +17,33 @@ Usage
 Here's an example session for using RubyFlux today:
 
 ```
+# The file we want to compile
+
+$ cat fib.rb
+def fib(a)
+  if a < 2
+    a
+  else
+    fib(a - 1) + fib(a - 2)
+  end
+end
+
+puts fib(40)
+
 # First need to build the compiler's jar
+
 $ mvn package
+<maven noise>
 
-# Provide the target and src dirs to -I flag along with -e or a group of files
-# to compile
-$ jruby -I target:src/main/ruby src/main/ruby/ruby_flux.rb -e "def fib(a); a < 2 ? a : fib(a - 1) + fib(a - 2); end; puts fib(40)"
-
-# The Ruby sources are translated to .java and all support code is copied out
-# of RubyFlux for the compilation step.
+# Provide the target file to 'rake run'.
 #
-# A -e argument will produce a DashE.java file. A list of sources will produce
-# a .java file for each.
-$ javac DashE.java
+# The Ruby sources are translated to .java and all support code is copied out
+# of RubyFlux for the compilation step. That source is then compiled and run.
+# to compile
 
-# All files are now compiled and in cwd, and DashE can be run directly
-$ java DashE
+$ rake run[fib.rb]
+jruby -I target:src/main/ruby src/main/ruby/ruby_flux.rb fib.rb
+javac fib.java
+java fib
 102334155
 ```
-
-The resulting .class files can be packaged alone, with no runtime dependencies.
