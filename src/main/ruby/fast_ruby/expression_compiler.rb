@@ -153,7 +153,6 @@ module FastRuby
 
       ast.new_method_invocation.tap do |method_invocation|
         method_invocation.name = ast.new_simple_name(safe_name(node.name))
-        method_invocation.expression = ast.new_this_expression
         
         node.args_node && node.args_node.child_nodes.each do |arg|
           arg_expression = ExpressionCompiler.new(ast, body_compiler, arg).start
@@ -268,7 +267,6 @@ module FastRuby
 
       ast.new_method_invocation.tap do |method_invocation|
         method_invocation.name = ast.new_simple_name(safe_name(node.name))
-        method_invocation.expression = ast.new_this_expression
       end
     end
 
