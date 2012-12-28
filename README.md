@@ -1,7 +1,7 @@
-FastRuby: a Ruby to Java compiler
+RubyFlux: a Ruby to Java compiler
 ----------------------------------
 
-FastRuby is a compiler that turns a Ruby codebase into a closed set of .java
+RubyFlux is a compiler that turns a Ruby codebase into a closed set of .java
 source files suitable for running on any JVM with no additional runtime
 requirement.
 
@@ -14,7 +14,7 @@ in Java code.
 Usage
 =====
 
-Here's an example session for using FastRuby today:
+Here's an example session for using RubyFlux today:
 
 ```
 # First need to build the compiler's jar
@@ -22,10 +22,10 @@ $ mvn package
 
 # Provide the target and src dirs to -I flag along with -e or a group of files
 # to compile
-$ jruby -I target:src/main/ruby src/main/ruby/fast_ruby.rb -e "def fib(a); a < 2 ? a : fib(a - 1) + fib(a - 2); end; puts fib(40)"
+$ jruby -I target:src/main/ruby src/main/ruby/ruby_flux.rb -e "def fib(a); a < 2 ? a : fib(a - 1) + fib(a - 2); end; puts fib(40)"
 
 # The Ruby sources are translated to .java and all support code is copied out
-# of FastRuby for the compilation step.
+# of RubyFlux for the compilation step.
 #
 # A -e argument will produce a DashE.java file. A list of sources will produce
 # a .java file for each.
