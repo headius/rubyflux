@@ -38,17 +38,19 @@ module FastRuby
 
       build_robject
 
+      FileUtils.mkdir('build') unless Dir.exists?('build')
+
       # all generated sources
       sources.each do |source|
         type = source.types[0]
-        File.open(type.name.to_s + ".java", 'w') do |file|
+        File.open(File.join('build', type.name.to_s + ".java"), 'w') do |file|
           file.write(source_to_document(source).get)
         end
       end
 
       # all copied sources
       COPIED_SOURCES.each do |srcname|
-        FileUtils.cp(File.join('src/main/java', srcname), ".")
+        FileUtils.cp(File.join('src/main/java', srcname), "build/.")
       end
     end
 
