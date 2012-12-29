@@ -22,7 +22,7 @@ public class RArray extends RObject {
     }
     
     public RObject $less$less(RObject what) {
-        add(what);
+        impl.add(what);
         
         return this;
     }
@@ -30,17 +30,28 @@ public class RArray extends RObject {
     public RObject $lbrack$rbrack(RObject where) {
         int index = (int)((RFixnum)where.to_i()).fix;
         
-        if (index < size()) {
-            return get(index);
+        if (index < 0) {
+            index = impl.size() + index;
         }
-        
-        return RNil;
+
+        if (index < impl.size()) {
+            return impl.get(index);
+        } else {
+            return RNil;
+        }
     }
     
     public RObject $lbrack$rbrack$equal(RObject where, RObject what) {
         int index = (int)((RFixnum)where.to_i()).fix;
         
-        // TODO index >= size
+        if (index < 0) {
+            index = impl.size() + index;
+        }
+
+        if (index >= impl.size()) {
+            impl.ensureCapacity(index + 1);
+        }
+
         impl.set(index, what);
         
         return this;
