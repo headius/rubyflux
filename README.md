@@ -11,6 +11,22 @@ an abstract implementation on RObject so all dynamic calls can simply be
 Java virtual calls. The rest of Ruby syntax maps to mostly what you'd expect
 in Java code.
 
+Getting Started
+===============
+
+1. Clone the repository
+2. From the repo dir, run "mvn package". You only need to do this once.
+3. Compile and/or run a target .rb file in one of several ways
+    * Generate Java sources directly, compile, and run
+        * `jruby -I target:src/main/ruby src/main/ruby/ruby\_flux.rb target.rb`
+        * `javac target.java`
+        * `java target`
+    * Generate Java sources via the Rakefile
+        * `rake compile[target.rb]
+        * Sources are output to build/ in the same dir as target.rb
+    * Generate, compile, and run via the Rakefile
+        * `rake run[target.rb]
+
 Usage
 =====
 
