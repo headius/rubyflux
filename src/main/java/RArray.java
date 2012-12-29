@@ -6,7 +6,7 @@ import java.util.Iterator;
 import java.util.List;
 import java.util.ListIterator;
 
-public class RArray extends RObject implements List<RObject> {
+public class RArray extends RObject {
     public final ArrayList<RObject> impl;
     
     public RArray() {
@@ -46,95 +46,12 @@ public class RArray extends RObject implements List<RObject> {
         return this;
     }
 
-    public int size() {
-        return impl.size();
+    public RObject size() {
+        return new RFixnum(impl.size());
     }
 
-    public boolean isEmpty() {
-        return impl.isEmpty();
-    }
-
-    public boolean contains(Object o) {
-        return impl.contains(o);
-    }
-
-    public Iterator<RObject> iterator() {
-        return impl.iterator();
-    }
-
-    public Object[] toArray() {
-        return impl.toArray();
-    }
-
-    public <T> T[] toArray(T[] a) {
-        return impl.toArray(a);
-    }
-
-    public boolean add(RObject e) {
-        return impl.add(e);
-    }
-
-    public boolean remove(Object o) {
-        return impl.remove(o);
-    }
-
-    public boolean containsAll(Collection<?> c) {
-        return impl.containsAll(c);
-    }
-
-    public boolean addAll(Collection<? extends RObject> c) {
-        return impl.addAll(c);
-    }
-
-    public boolean addAll(int index, Collection<? extends RObject> c) {
-        return impl.addAll(index, c);
-    }
-
-    public boolean removeAll(Collection<?> c) {
-        return impl.removeAll(c);
-    }
-
-    public boolean retainAll(Collection<?> c) {
-        return impl.retainAll(c);
-    }
-
-    public void clear() {
+    public RObject clear() {
         impl.clear();
-    }
-
-    public RObject get(int index) {
-        return impl.get(index);
-    }
-
-    public RObject set(int index, RObject element) {
-        return impl.set(index, element);
-    }
-
-    public void add(int index, RObject element) {
-        impl.add(index, element);
-    }
-
-    public RObject remove(int index) {
-        return impl.remove(index);
-    }
-
-    public int indexOf(Object o) {
-        return impl.indexOf(o);
-    }
-
-    public int lastIndexOf(Object o) {
-        return impl.lastIndexOf(o);
-    }
-
-    public ListIterator<RObject> listIterator() {
-        return impl.listIterator();
-    }
-
-    public ListIterator<RObject> listIterator(int index) {
-        return impl.listIterator(index);
-    }
-
-    public List<RObject> subList(int fromIndex, int toIndex) {
-        return new RArray(impl.subList(fromIndex, toIndex));
+        return this;
     }
 }
