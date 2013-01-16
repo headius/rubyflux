@@ -11,6 +11,13 @@ an abstract implementation on RObject so all dynamic calls can simply be
 Java virtual calls. The rest of Ruby syntax maps to mostly what you'd expect
 in Java code.
 
+On the Net
+==========
+
+Github repository: https://github.com/headius/rubyflux
+
+Mailing list: https://groups.google.com/forum/?fromgroups#!forum/ruby_flux
+
 Getting Started
 ===============
 
