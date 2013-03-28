@@ -82,21 +82,5 @@ module RubyFlux
 
       arity
     end
-
-    def safe_name(name)
-      case name
-        when '+'; '_plus_'
-        when '-'; '_minus_'
-        when '*'; '_times_'
-        when '/'; '_divide_'
-        when '<'; '_lt_'
-        when '>'; '_gt_'
-        when '<='; '_le_'
-        when '>='; '_ge_'
-        when '=='; '_equal_'
-        when '<=>'; '_cmp_'
-        else; name
-      end
-    end
   end
 end

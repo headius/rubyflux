@@ -5,12 +5,40 @@ import java.util.GregorianCalendar;
 public class RTime extends RObject {
     public final Calendar cal;
     
+    public static class TimeMeta extends ObjectMeta {
+        public TimeMeta(String name) {
+            super(name);
+        }
+        
+        public TimeMeta() {
+            super("Time");
+        }
+        
+        @Override
+        public RObject $new() {
+            return new RTime();
+        }
+        
+        @Override
+        public RObject $new(RObject arg) {
+            Object asJava = arg.to_java();
+            if (asJava instanceof Calendar) {
+                return new RTime((Calendar)asJava);
+            }
+            throw new RuntimeException("invalid argument type: " + arg.$class().name());
+        }
+    }
+    
     public RTime() {
         this(new GregorianCalendar());
     }
     
     public RTime(Calendar cal) {
         this.cal = cal;
+    }
+    
+    public RClass $class() {
+        return RTime;
     }
     
     public RObject to_s() {

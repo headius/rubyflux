@@ -1,13 +1,35 @@
 
 import java.util.ArrayList;
 import java.util.Arrays;
-import java.util.Collection;
-import java.util.Iterator;
 import java.util.List;
-import java.util.ListIterator;
 
 public class RArray extends RObject {
     public final ArrayList<RObject> impl;
+    
+    public static class ArrayMeta extends ObjectMeta {
+        public ArrayMeta(String name) {
+            super(name);
+        }
+        
+        public ArrayMeta() {
+            super("Array");
+        }
+        
+        @Override
+        public RObject $new(RObject... args) {
+            return new RArray(args);
+        }
+        
+        @Override
+        public RObject $new() {
+            return new RArray();
+        }
+        
+        @Override
+        public RObject $new(RObject arg) {
+            return new RArray(arg);
+        }
+    }
     
     public RArray() {
         impl = new ArrayList<RObject>();
@@ -19,6 +41,10 @@ public class RArray extends RObject {
     
     public RArray(List<RObject> impl) {
         this.impl = new ArrayList<RObject>(impl);
+    }
+    
+    public RClass $class() {
+        return RArray;
     }
     
     public RObject $less$less(RObject what) {

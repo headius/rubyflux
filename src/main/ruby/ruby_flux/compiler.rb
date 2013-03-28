@@ -8,10 +8,11 @@ module RubyFlux
       @files = files
       @source = source
       @sources = []
+      @classes = []
       @methods = {}
     end
 
-    attr_accessor :sources, :methods
+    attr_accessor :sources, :methods, :classes
 
     def compile
       if !@source
@@ -66,6 +67,19 @@ module RubyFlux
 
       robject_cls.superclass_type = ast.new_simple_type(ast.new_simple_name("RKernel"))
       source.types << robject_cls
+      
+      classes.each do |class_name|
+        metaclass_fragment = ast.new_variable_declaration_fragment
+        metaclass_fragment.name = ast.new_simple_name(class_name)
+        metaclass_init = ast.new_class_instance_creation
+        metaclass_init.type = ast.new_simple_type(ast.new_name([class_name, class_name + "Meta"].to_java(:string)))
+        metaclass_fragment.initializer = metaclass_init
+        metaclass_field = ast.new_field_declaration(metaclass_fragment)
+        metaclass_field.type = ast.new_simple_type(ast.new_name([class_name, class_name + "Meta"].to_java(:string)))
+        metaclass_field.modifiers << ast.new_modifier(ModifierKeyword::PUBLIC_KEYWORD)
+        metaclass_field.modifiers << ast.new_modifier(ModifierKeyword::STATIC_KEYWORD)
+        robject_cls.body_declarations << metaclass_field
+      end
 
       methods.each do |name, arity|
         next if BUILTINS.include? name

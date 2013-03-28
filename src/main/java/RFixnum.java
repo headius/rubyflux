@@ -3,8 +3,23 @@ import java.math.BigInteger;
 
 public class RFixnum extends RObject {
     public final long fix;
+    
+    public static final RFixnum ZERO = new RFixnum(0);
+    public static final RFixnum ONE = new RFixnum(1);
+    public static final RFixnum TWO = new RFixnum(2);
+    
+    public static final class FixnumMeta extends ObjectMeta {
+        public FixnumMeta() {
+            super("Fixnum");
+        }
+    }
+    
     public RFixnum(long fix) {
         this.fix = fix;
+    }
+    
+    public RClass $class() {
+        return RFixnum;
     }
 
     public RObject to_s() {

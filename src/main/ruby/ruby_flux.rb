@@ -11,7 +11,7 @@ require 'ruby_flux/statement_compiler'
 require 'ruby_flux/expression_compiler'
 
 module RubyFlux
-  BUILTINS = %w[puts print]
+  BUILTINS = %w[puts print $class to_i to_int to_s to_f initialize $new $equal$equal]
 
   Char = java.lang.Character
   java_import org.eclipse.jdt.core.dom.AST
@@ -26,6 +26,7 @@ module RubyFlux
   InfixOperator = InfixExpression::Operator
 
   COPIED_SOURCES = %w[
+    RNil.java
     RKernel.java
     RFixnum.java
     RBoolean.java
@@ -33,6 +34,7 @@ module RubyFlux
     RFloat.java
     RArray.java
     RTime.java
+    RClass.java
   ]
 end
 

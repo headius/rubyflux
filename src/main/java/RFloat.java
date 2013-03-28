@@ -1,8 +1,18 @@
 public class RFloat extends RObject {
     public final double flo;
     
+    public static class FloatMeta extends ObjectMeta {
+        public FloatMeta() {
+            super("Float");
+        }
+    }
+    
     public RFloat(double flo) {
         this.flo = flo;
+    }
+    
+    public RClass $class() {
+        return RFloat;
     }
     
     public RObject to_s() {

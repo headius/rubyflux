@@ -76,13 +76,13 @@ module RubyFlux
     end
 
     def visitCallNode(node)
-      method_invocation = case node.name
-      when "new"
-        ast.new_class_instance_creation.tap do |construct|
-          construct.type = ast.new_simple_type(ast.new_simple_name(proper_class(node.receiver_node.name)))
-        end
-      else
-        ast.new_method_invocation.tap do |method_invocation|
+#      method_invocation = case node.name
+#      when "new"
+#        ast.new_class_instance_creation.tap do |construct|
+#          construct.type = ast.new_simple_type(ast.new_simple_name(proper_class(node.receiver_node.name)))
+#        end
+#      else
+        method_invocation = ast.new_method_invocation.tap do |method_invocation|
           method_invocation.name = ast.new_simple_name(safe_name(node.name))
           if org.jruby.ast.ConstNode === node.receiver_node
             method_invocation.expression = ast.new_name(proper_class(node.receiver_node.name))
@@ -91,7 +91,7 @@ module RubyFlux
             method_invocation.expression = ExpressionCompiler.new(ast, body_compiler, node.receiver_node).start
           end
         end
-      end
+#      end
         
       node.args_node && node.args_node.child_nodes.each do |arg|
         arg_expression = ExpressionCompiler.new(ast, body_compiler, arg).start
@@ -134,6 +134,17 @@ module RubyFlux
     end
 
     def visitConstNode(node)
+#      if class_compiler.imports.include? node.name
+#        # java import; handle via RJavaClass
+#        ast.new_class_instance_creation.tap do |construct|
+#          construct.type = ast.new_simple_type(ast.new_simple_name('RJavaClass'))
+#          construct.arguments << ast.new_type_literal
+#            arg_expression = ExpressionCompiler.new(ast, body_compiler, arg).start
+#            method_invocation.arguments << arg_expression
+#          end
+#        end
+#        ast.new_qualified_name( ast.new_simple_name(node.name))
+#      end
       ast.new_qualified_name(ast.new_simple_name(class_compiler.class_name), ast.new_simple_name(node.name))
     end
 
@@ -149,6 +160,20 @@ module RubyFlux
     end
 
     def visitFCallNode(node)
+      case node.name
+      when "import"
+        class_name = node.args_node.child_nodes[0].value
+        class_elts = class_name.split('.')
+        
+        class_compiler.imports[short_name] = class_name
+        ast.new_import_declaration.tap do |import_declaration|
+          import_declaration.name = ast.new_name(class_elts.to_java(:string))
+          class_compiler.compiler.sources[0].imports.add 0, import_declaration
+        end
+        
+        return nil
+      end
+      
       class_compiler.compiler.methods[safe_name(node.name)] = node.args_node ? node.args_node.child_nodes.size : 0
 
       ast.new_method_invocation.tap do |method_invocation|
@@ -295,54 +320,6 @@ module RubyFlux
     def visitZArrayNode(node)
       ast.new_class_instance_creation.tap do |ary|
         ary.type = ast.new_simple_type(ast.new_simple_name('RArray'))
-      end
-    end
-
-    def safe_name(name)
-      new_name = ''
-
-      name.chars.each do |ch|
-        new_name << case ch
-          when '+'; '$plus'
-          when '-'; '$minus'
-          when '*'; '$times'
-          when '/'; '$div'
-          when '<'; '$less'
-          when '>'; '$greater'
-          when '='; '$equal'
-          when '&'; '$tilde'
-          when '!'; '$bang'
-          when '%'; '$percent'
-          when '^'; '$up'
-          when '?'; '$qmark'
-          when '|'; '$bar'
-          when '['; '$lbrack'
-          when ']'; '$rbrack'
-          else; ch;
-        end
-      end
-
-      new_name
-    end
-
-    def proper_class(name)
-      case name
-      when 'String'
-        'RString'
-      when 'Array'
-        'RArray'
-      when 'Fixnum'
-        'RFixnum'
-      when 'Boolean'
-        'RBoolean'
-      when 'Float'
-        'RFloat'
-      when 'Time'
-        'RTime'
-      when 'Object'
-        'RObject'
-      else
-        name
       end
     end
   end
