@@ -11,6 +11,8 @@ an abstract implementation on RObject so all dynamic calls can simply be
 Java virtual calls. The rest of Ruby syntax maps to mostly what you'd expect
 in Java code.
 
+Note that this is a young project and it is not yet considered stable for general use.
+
 On the Net
 ==========
 
