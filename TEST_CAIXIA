@@ -1,0 +1,891 @@
+=begin
+  Copyright 2014 (c), TIG
+  All Rights Reserved.
+  THIS SOFTWARE IS PROVIDED "AS IS" AND WITHOUT ANY EXPRESS OR IMPLIED 
+  WARRANTIES,INCLUDING,WITHOUT LIMITATION,THE IMPLIED WARRANTIES OF 
+  MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE.
+###
+  extrudeEdgesByFaces.rb
+###
+  Extrudes an 'initial-profile' Face along a 'rail' curve to form a 
+  faced-mesh group, a final 'melding-profile' Face option can control 
+  the mesh's final form.
+###
+Usage:
+   Make 1 or two Faces to use as the Profile/Melding-Profile.
+   The 3D location/orientation of the Faces is important - see below...
+   Any 'inner loops' [holes] in Faces are ignored.
+   To make a 'hollow' tube-like extrusion face the two - ring & hole - 
+   extrude separate forms ensuring that the inner in 'inside out', then 
+   merge the groups/intersect and erase the unwanted end 'caps'...
+   Make a 'curve' (Arcs/Beziers/PolyLines/Welded-Edges etc) to use 
+   as the Rail.
+   These will represent the 'Initial-Profile-Face', the 'Rail', and the 
+   'Melding-Profile-Face'.
+   The 'Initial-Profile-Face' is best sharing a common vertex with the 
+   'Rail': if not it will be 'relocated' at the Rail's start to suit - 
+   the nearest node on a Face's edges to the Rail will be used as a snap.
+   You are asked for the 'Melding-Profile-Face': you can pick on 
+   the 'Initial-Profile-Face' again to form a simpler mesh from just 
+   that one Face, but using a 'Melding-Profile-Face' means that all of 
+   the intermediate Profiles will have a proportional 'melding' between 
+   the 'Initial-Profile-Face' and the [Final] 'Melding-Profile-Face' 
+   along the Rail's intermediate nodes...
+   The location of this 'Melding-Profile-Face' also affects the result, 
+   it is best sharing a common vertex with the 'Rail': if not it will be 
+   'relocated' at the Rail's end to suit - the nearest node on a Face's 
+   edges to the Rail will be used as a snap.
+   
+  Run the Tool from Plugins > 'Extrude Edges by Faces'.
+   or click on Toolbar 'Extrude Edges by Faces'.
+   Activate this Toolbar from View > Toolbars if not loaded.
+   Follow the prompts on the VCB.
+   Pick the Faces and Rail Curve in the order instructed...
+   First pick the 'Initial-Profile-Face', then pick the Rail's Curve.
+   Finally pick a 'Melding-Profile-Face', or you can pick the 
+   'Initial-Profile-Face' again for a simpler mesh form without a fixed 
+   final-profile-face form etc.
+   After selecting these faces & curve it auto-runs the mesh-maker...
+   A grouped triangulated mesh is made based on these faces & curve...
+   The 'ends' are also 'capped' with faces.
+   Then there are dialogs asking for Yes/No replies...
+    If you want to 'reverse' the faces in the mesh.
+    If you want to erase any 'coplanar edges' in the mesh. 
+    If you want to 'smooth' the edges in the mesh. 
+   You can Undo these steps individually immediately afterwards...
+    
+   NOTE:
+   Multi-segmented edged faces increase processing time exponentially... 
+   the mesh WILL eventually be made, but the screen might 'white out' 
+   and it might appear to stop for several minutes...  but it is working...
+   Profile-Faces with the same number of segments/edges or with 
+   them as simple 'multiples' will produce the fewest facets.  
+   It is sensible to 'match' the segments in profile-faces, 
+   otherwise a mesh can become VERY faceted or possibly uneven - 
+   and also it might take ages to make. 
+   However, using say a 'square' face melding to a 'circular' face will 
+   necessitate auto-divisions to match the circle's segment count.
+   For example, for two faces' edge-sets their segments for each part of 
+   a rail's curve are dictated by the most segmented set:
+   10 + 20 segments=20 x 2 = 40 facets
+   10 + 10 segments=10 x 2 = 20 facets
+   10 + 7  segments=10 x 2 = 20 facets
+   10 + 3  segments=10 x 2 = 20 facets
+   [ 3 is the minimum edges a face can have ]
+   The lesser segmented edge-set will always have some of its segments 
+   re-divided to match the more segmented ones segments. This 
+   division is spaced evenly for edge-sets that are segmented as 
+   multiples, but this can only approximate to 'even' otherwise...
+   
+   For a rail that is to be 'linear' draw an Edge & Divide it as needed 
+   equivalent to the number of 'facets' required or to match the other 
+   rail, then 'Weld' the pieces together into one 'straight' curve.
+   If you want a single Edge as a rail then make a single segment 
+   Polyline with BZ Tools, or make a Curve out of two edges [with Weld 
+   etc] and split the Curve with another perpendicular Edge and Erase 
+   this and the unwanted Edge in the Curve - then you have a Curve with 
+   a single Edge - alternatively Divide the Edge into two and get a 
+   seam in the mesh - you can always use a 'Erase-Coplanar-Edges' tool 
+   to minimize the divisions later or you can always add back any lost 
+   triangulation by using the 'Triangulate Quad Faces' tool...
+   Occasionally Curves made from welded/re-welded/re-re-welded[!]/etc 
+   have vertices in an order that can be unexpectedly convoluted 
+   and create weird results - if you remake the Curve from scratch 
+   it should be OK.  Sometimes cutting and pasting-in-place or 
+   grouping and exploding a problem curve can also fix it for use...
+   
+Donations:
+   Are welcome [by PayPal], please use 'TIGdonations.htm' in the 
+   ../Plugins/TIGtools/ folder.
+   
+Version:
+   1.0 20100219 First release.
+   1.1 20100220 Color coding of picked faces/curves added.
+                ProfileFaceEdges=Cyan
+                Rail=Magenta
+                MeldingProfileFaceEdges=DarkCyan
+   1.2 20100222 Tooltips etc now deBabelized properly.
+   1.3 20100330 Rare glitch woth self.xxx fixed.
+   1.4 20111023 Smooth now ignores edges with only one face.
+   1.5 20111207 Group.copy replaced to avoid clashes with rogue scripts.
+   2.0 20130520 Becomes part of ExtrudeTools Extension.
+
+=end
+###
+module ExtrudeTools
+###
+toolname="extrudeEdgesByFaces"
+cmd=UI::Command.new(db("Extrude Edges by Faces")){Sketchup.active_model.select_tool(ExtrudeTools::ExtrudeEdgesByFaces.new())}
+cmd.tooltip=db("Extrude Edges by Faces")
+cmd.status_bar_text="..."
+cmd.small_icon=File.join(EXTOOLS, "#{toolname}16x16.png")
+cmd.large_icon=File.join(EXTOOLS, "#{toolname}24x24.png")
+SUBMENU.add_item(cmd)
+TOOLBAR.add_item(cmd)
+###
+class ExtrudeEdgesByFaces
+
+include ExtrudeTools
+
+class Sketchup::Face
+ def orient_connected_faces
+    @connected_faces=[]
+	self.all_connected.each{|e|
+	  if e.class==Sketchup::Face
+		e.edges.each{|edge|
+		  if edge.faces[1]
+            @connected_faces << e
+            break
+          end#if
+        }
+	  end#if
+	}
+    @connected_faces=[self] + @connected_faces 
+    @connected_faces.uniq!
+	@awaiting_faces=@connected_faces
+    @processed_faces=[self]
+    @done_faces=[]
+    msg=""#(db("Orienting Faces"))
+    ###
+	while @awaiting_faces[0]
+      msg=msg+"."
+	  @processed_faces.each{|face|
+        if not @done_faces.include?(face)
+	      Sketchup::set_status_text(msg)
+		  @face=face
+          face_flip
+        end#if
+	  }
+    end#while
+	Sketchup::set_status_text("")
+ end#def
+ def face_flip
+    @awaiting_faces=@awaiting_faces-[@face]
+    @face.edges.each{|edge|
+      rev1=edge.reversed_in?(@face)
+      @common_faces=edge.faces-[@face]
+      @common_faces.each{|face|
+	    rev2=edge.reversed_in?(face)
+        face.reverse! if @awaiting_faces.include?(face) and rev1==rev2
+	    @awaiting_faces=@awaiting_faces-[face]
+	    @processed_faces<<face
+	  }
+    }
+    @done_faces<<@face
+ end#def
+end#class
+
+  def initialize()
+    @toolname="extrudeEdgesByFaces"
+    ###
+  end#initialize
+  
+  def db(string)
+	locale=Sketchup.get_locale.upcase
+	path=File.join(EXTOOLS, @toolname+locale+".lingvo")
+	if File.exist?(path)
+		deBabelizer(string,path)
+	else
+		return string
+	end
+  end#def
+  
+  def activate
+    @model=Sketchup.active_model
+    @ents=@model.active_entities
+    @sel=@model.selection
+    @sel.clear
+	if Sketchup.version[0,1].to_i > 6
+		@model.start_operation((db("Extrude Edges by Faces")),true)
+        ### 'false' is best to see results as UI/msgboxes...
+	else
+		@model.start_operation((db("Extrude Edges by Faces")))
+	end  
+    @state=0 ### counter for selecting faces and curves
+    @profile=nil
+    @mprofile=nil ###v2.4 typo fix
+    @profiles=[]
+    @mprofiles=[]
+    @profileface=nil
+    @mprofileface=nil
+    @rail1=nil
+    @rail2=nil
+    @msg=(db("Extrude Edges by Faces: Select the 'Profile' Face..."))
+    Sketchup::set_status_text(@msg)
+  end#activate
+  
+  def reset
+    ###
+  end#reset
+  
+  def deactivate(view)
+    ### view.inactivate if view ###
+    Sketchup.send_action("selectSelectionTool:")
+  end#deactivate
+  
+def resume(view)
+  Sketchup::set_status_text(@msg)
+  view.invalidate
+end
+  
+  def onMouseMove(flags,x,y,view)
+    case @state
+     when 0 ### getting the profile
+      #view.invalidate
+      view.tooltip=(db("Pick Profile Face"))
+     when 1 ### getting the rail
+      #view.invalidate
+      view.tooltip=(db("Pick Rail Curve"))
+     when 2 ### getting the melding
+      #view.invalidate
+      view.tooltip=(db("Pick Melding Profile Face"))
+    end#case
+  end#onMouseMove
+
+  def onLButtonDown(flags,x,y,view)
+    ph=view.pick_helper
+    ph.do_pick(x,y)
+    best=ph.best_picked
+    if best and best.valid?
+      case @state
+       when 0
+        if best.class==Sketchup::Face
+          @profileface=best
+          @profiles=@profileface.outer_loop.edges
+          @sel.add(@profileface)
+          @sel.add(@profiles)
+          @msg=(db("Extrude Edges by Faces: Select the 'Rail' Curve..."))
+          Sketchup::set_status_text(@msg)
+          @state=1
+        else
+          UI.beep
+          view.invalidate
+          view.tooltip=(db("Pick Profile Face"))
+        end#if
+       when 1
+        if best.class==Sketchup::Edge and best.curve and not @profiles.include?(best.curve.edges[0]) ### NOT face edge
+          @sel.add(best.curve.edges)
+          @rail1=best
+          @msg=(db("Extrude Edges by Faces: Select the 'Melding-Profile' Face..."))
+          Sketchup::set_status_text(@msg)
+          @state=2
+        else
+          UI.beep
+          view.invalidate
+          view.tooltip= db("Pick Rail Curve")
+        end#if
+       when 2
+        if best.class==Sketchup::Face
+          @mprofileface=best
+          @mprofiles=@mprofileface.outer_loop.edges
+          @sel.add(@mprofileface)
+          @sel.add(@mprofiles)
+          #view.invalidate
+          @msg=(db("Extrude Edges by Faces: Making Mesh from Face Profiles and Rail Curve..."))
+          Sketchup::set_status_text(@msg)
+          self.make_mesh()
+        else
+          UI.beep
+          view.invalidate
+          view.tooltip=(db("Pick Melding Profile Face"))
+        end#if
+      end#case
+    end#if
+  end#onLButtonDown
+  
+  def draw(view)
+    view.line_width=7
+    if @profiles
+      view.drawing_color="cyan"
+      @profiles.each{|e|view.draw_line(e.start.position,e.end.position)}
+    end#if
+    if @rail1
+      view.drawing_color="magenta"
+      @rail1.curve.edges.each{|e|view.draw_line(e.start.position,e.end.position)}
+    end#if
+    if @mprofiles
+      view.drawing_color="darkcyan"
+      @mprofiles.each{|e|view.draw_line(e.start.position,e.end.position)}
+    end#if
+  end#draw
+  
+  
+  def make_mesh()
+
+    @profile_edges=@profiles
+    @rail1_edges=@rail1.curve.edges
+    @mprofile_edges=@mprofiles
+    ### v2... find most segmented rail & profile
+    if @profile_edges.length >= @mprofile_edges.length
+      max=@profile_edges.length
+      min=@mprofile_edges.length
+      is_p=true
+    else
+      max=@mprofile_edges.length
+      min=@profile_edges.length
+      is_p=false
+    end#if
+    ### work out divisions of other lesser segmented profile edges and the remainder
+    div=(max/min) ### every min edge gets divided up by this
+    rem=(max-(div*min)) ### this is how many edges get div+1 divisions
+    ### work out which edges get extra division ------------------------
+    if rem==0
+      xdivs=[]
+    elsif (rem.to_f/min.to_f)==0.5
+      xdivs=[];ctr=-1
+      (min.to_f/2.0).round.to_i.times{ctr=ctr+2;xdivs<<ctr}
+      ### e.g. [1,3,5]
+    elsif (rem.to_f/min.to_f)<0.5
+      xdivs=[]
+      step=(min.to_f/rem.to_f).to_f
+      rem.times{|i|xdivs<<1+(step*i.to_f).to_i}
+      ### e.g. [1,3]
+    elsif (rem.to_f/min.to_f)>0.5
+      xdivs=[]
+      min.times{|i|;xdivs<<i}
+      idivs=[]
+      inv=min-rem-1
+      step=(min.to_f/inv.to_f).to_f
+      inv.times{|i|idivs<<1+(step*i.to_f).to_i}
+      xdivs=xdivs-idivs
+      ### e.g. [0,2,4]
+    end#if
+    ###--------------------------------------
+    divpoints=[]
+    undivpoints=[]
+    if is_p
+      ppoints=self.order_points(@mprofile_edges)
+      tpoints=self.order_points(@profile_edges)
+    else
+      ppoints=self.order_points(@profile_edges)
+      tpoints=self.order_points(@mprofile_edges)
+    end#if
+    0.upto(ppoints.length-2) do |i|
+      pts=ppoints[i]
+      pte=ppoints[i+1]
+      len=pts.distance(pte)
+      vec=pte-pts
+      ptx=pts.clone
+      divpoints<<ptx
+      ddiv=div
+      ddiv=div+1 if xdivs.include?(i+1)
+      ddiv.to_i.times{|j|
+        dis=len*j.to_f/ddiv.to_f
+        ptn=pts.offset(vec,dis)
+        ptx=ptn.clone
+        divpoints<<ptx if ptx != divpoints.last
+      }
+      ptx=pte.clone
+      divpoints<<ptx
+    end#do
+    divpoints.uniq!
+    0.upto(tpoints.length-2) do |i|
+      pts=tpoints[i]
+      pte=tpoints[i+1]
+      len=pts.distance(pte)
+      vec=pte-pts
+      ptx=pts.clone
+      undivpoints<<ptx
+      ddiv=1
+      ddiv.to_i.times{|j|
+        dis=len*j.to_f/ddiv.to_f
+        ptn=pts.offset(vec,dis)
+        ptx=ptn.clone
+        undivpoints<<ptx if ptx != undivpoints.last
+      }
+      ptx=pte.clone
+      undivpoints<<ptx
+    end#do
+    undivpoints.uniq!
+    if is_p
+      @gpm=@ents.add_group() ### melding profile group
+      @gpm.entities.add_curve(divpoints)
+      @gp=@ents.add_group()### profile group
+      @gp.entities.add_curve(undivpoints)
+    else
+      @gp=@ents.add_group() ### profile group
+      @gp.entities.add_curve(divpoints)
+      @gpm=@ents.add_group()### melding profile group
+      @gpm.entities.add_curve(undivpoints)
+    end#if
+    ### now have 2 properly divided profiles
+    ### ------------------------------------------------------------ ###
+    tpoints=self.order_points(@rail1_edges)
+    @gp1=@ents.add_group()
+    @gp1.entities.add_curve(tpoints)
+    ### now have temp rail
+    
+    ### now we make edges ,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,
+    @tprofile_edges=@gp.entities.to_a
+    @mprofile_edges=@gpm.entities.to_a
+    @trail1_edges=@gp1.entities.to_a
+    
+    points=self.order_points(@tprofile_edges)
+    pointsm=self.order_points(@mprofile_edges)
+    points1=self.order_points(@trail1_edges)
+
+    ### Face edges are always looped...
+    looped=true
+    ### melding profile
+    loopedm=true
+    ###
+    if @rail1_edges[0].curve.vertices.length != @rail1_edges[0].curve.vertices.uniq.length
+      looped1=true
+    else
+      looped1=false
+    end#if
+    ###
+    ### now use if they're looped etc
+    verts=[]
+    @tprofile_edges.each{|e|verts<<e.vertices[0]<<e.vertices[1]}
+    verts.uniq!
+    ###
+    vertsm=[]
+    @mprofile_edges.each{|e|vertsm<<e.vertices[0]<<e.vertices[1]}
+    vertsm.uniq!
+    ###
+    verts1=@trail1_edges[0].curve.vertices
+    ###
+    if looped ### find nearest point to looped1
+      dists=[]
+      verts.each{|v|p=v.position.to_a
+        verts1.each{|v1|
+          p1=v1.position.to_a
+          dists<<[p.distance(p1),p,p1]
+        }
+      }
+      dists.sort!
+      near=dists[0][1]
+      ### split points at 'near' and duplicate on end
+      index=points.index(near)
+      points=points[index..-1]+points[0..index]
+    end#if
+    ###
+    if loopedm ### find nearest point to looped1
+      dists=[]
+      vertsm.each{|v|p=v.position.to_a
+        verts1.each{|v1|
+          p1=v1.position.to_a
+          dists<<[p.distance(p1),p,p1]
+        }
+      }
+      dists.sort!
+      near=dists[0][1]
+      ### split pointsm at 'near' and duplicate on end
+      index=pointsm.index(near)
+      pointsm=pointsm[index..-1]+pointsm[0..index]
+    end#if
+    if looped1 ### find nearest point to end_points
+      dists=[]
+      verts1.each{|v|p=v.position.to_a
+        verts.each{|v1|
+          p1=v1.position.to_a
+          dists<<[p.distance(p1),p,p1]
+        }
+      }
+      dists.sort!
+      near=dists[0][1]
+      ### split points1 at 'near' and put a duplicate on end
+      index=points1.index(near)
+      points1=points1[index..-1]+points1[0..index]
+    end#if
+    ###
+    ### check if need to reverse any point lists ???
+    ###
+    if points[0].distance(points1[0])>points[0].distance(points1[-1])
+      points1.reverse!
+    end#if
+    ###############
+    if points[0].distance(points1[0])>points[0].distance(points1[-1])
+      points1.reverse!
+    end#if
+    ###
+    ### ensure reversed properly
+    if @profileface == @mprofileface
+      if points != pointsm
+        pointsm.reverse!
+      end#if
+    end#if
+    ###    
+    tpoints1=[]
+    points1.each{|p|tpoints1<<p.to_a}
+    points1=tpoints1.uniq
+    points1=points1<<points1[0] if looped1
+    
+    ### if EITHER rail1 OR rail2 might be reversed so == 'twisted' ?
+    ### allow to reverse rail-1 after we see what mesh is like...
+    
+    #################
+    self.make_shell(points,points1,pointsm)
+    #################
+    group=@shell
+    gents=group.entities
+    ###
+    @msg=(db("Extrude Edges by Faces: Formating Mesh... Please Wait..."))
+    Sketchup::set_status_text(@msg)
+    ###
+    ### add 'end caps'
+    edge1=nil
+    gents.to_a.each{|e|
+      if e.class==Sketchup::Edge and e.faces.length==1
+        e.find_faces
+      end#if
+    }
+    ### repeat to catch other end
+    edge1=nil
+    gents.to_a.each{|e|
+      if e.class==Sketchup::Edge and e.faces.length==1
+        e.find_faces
+      end#if
+    }
+    ### remove temp 'split' groups etc
+    @gp.erase!
+    @gpm.erase!
+    @gp1.erase!
+    ###
+    @model.commit_operation
+     
+    ### Tidying up at end...
+#=begin ### remove this leading # here AND at #=end below, ~Line491 near end, to skip extra tools
+    
+    faces=[];gents.each{|e|faces<<e if e.class==Sketchup::Face}
+    
+    ### [re]orient faces if one is flat and at zero
+    faces.each{|face|
+      if face.normal.z.abs==1.0 and face.bounds.min.z==0.0
+        face.orient_connected_faces
+        break ### only needs doing once
+      end#if
+    }
+    
+    ### reverse faces ?
+    @msg=((db("Extrude Edges by Faces: Reverse "))+faces.length.to_s+(db(" Faces ?")))
+    Sketchup::set_status_text(@msg)
+  if UI.messagebox((db("Extrude Edges by Faces:"))+"\n\n"+(db("Reverse Faces ?"))+"\n\n\n\n",MB_YESNO,"")==6 ### 6=YES 7=NO 
+    ### pause here so we see result...
+	if Sketchup.version[0,1].to_i > 6
+		@model.start_operation((db("Extrude Edges by Faces: Reversing Face ")),true)
+        ### 'false' is best to see results as UI/msgboxes...
+	else
+		@model.start_operation((db("Extrude Edges by Faces: Reversing Face ")))
+	end
+    tick=1
+    faces.each{|e|
+      e.reverse!
+      @msg=((db("Extrude Edges by Faces: Reversing Face "))+tick.to_s+(db(" of "))+faces.length.to_s)
+      Sketchup::set_status_text(@msg)
+      tick+=1
+    }
+    @model.commit_operation
+  end#if 
+    @msg=(db("Extrude Edges by Faces: Erase Coplanar Edges ?"))
+    Sketchup::set_status_text(@msg)
+  if UI.messagebox((db("Extrude Edges by Faces:"))+"\n\n"+(db("Erase Coplanar Edges ?"))+"\n\n\n\n",MB_YESNO,"")==6 ### 6=YES 7=NO
+    ### pause here so we see result...
+	if Sketchup.version[0,1].to_i > 6
+		@model.start_operation((db("Extrude Edges by Faces: Erase Coplanar Edges ?")),true)
+        ### 'false' is best to see results as UI/msgboxes...
+	else
+		@model.start_operation((db("Extrude Edges by Faces: Erase Coplanar Edges ?")))
+	end
+    counter=0
+    4.times do ### to make sure we got all of them !
+     gents.to_a.each{|e|
+      if e.valid? and e.class==Sketchup::Edge
+       if not e.faces[0]
+         e.erase!
+         counter+=1
+         @msg=((db("Extrude Edges by Faces: Coplanar Edges Erased= "))+counter.to_s)
+         Sketchup::set_status_text(@msg)
+       elsif e.faces.length==2 and e.faces[0].normal.dot(e.faces[1].normal)> 0.99999999999 ####
+         e.erase!
+         counter+=1
+         @msg=((db("Extrude Edges by Faces: Coplanar Edges Erased= "))+counter.to_s)
+         Sketchup::set_status_text(@msg)
+       end#if
+      end#if
+     }
+    end#times
+    @model.commit_operation
+  end#if 
+     
+     
+    ### intersect with self
+    @msg=(db("Extrude Edges by Faces: Intersect Mesh with Self ?"))
+    Sketchup::set_status_text(@msg)
+  if UI.messagebox((db("Extrude Edges by Faces:"))+"\n\n"+(db("Intersect Mesh with Self ?"))+"\n\n"+(db("This is only necessary with convoluted meshes...")),MB_YESNO,"")==6 ### 6=YES 7=NO
+    ### pause here so we see result...
+	if Sketchup.version[0,1].to_i > 6
+		@model.start_operation((db("Extrude Edges by Faces: Intersect Mesh with Self ?")),true)
+        ### 'false' is best to see results as UI/msgboxes...
+	else
+		@model.start_operation((db("Extrude Edges by Faces: Intersect Mesh with Self ?")))
+	end
+      @msg=(db("Extrude Edges by Faces: Intersecting Mesh with Self... Please Wait..."))
+      Sketchup::set_status_text(@msg)
+      gentsa1=group.entities.to_a
+      gnum1=gents.length
+      group.entities.intersect_with(true,group.transformation,group,group.transformation,true,group)
+      gentsa2=group.entities.to_a
+      gnum2=gents.length
+      @model.commit_operation
+  end#intersect
+    ###
+    
+    ### smooth edges ?
+    edges=[];gents.each{|e|edges<<e if e.class==Sketchup::Edge and e.faces[1]}
+    @msg=((db("Extrude Edges by Faces: Smooth "))+edges.length.to_s+(db(" Edges ?")))
+    Sketchup::set_status_text(@msg)
+  if yn=UI.messagebox((db("Extrude Edges by Faces:"))+"\n\n"+(db("Smooth Edges ?"))+"\n\n\n\n",MB_YESNO,"")==6 ### 6=YES 7=NO
+    ### pause here so we see result...
+	if Sketchup.version[0,1].to_i > 6
+		@model.start_operation((db("Extrude Edges by Faces: Smoothing Edge ")),true)
+        ### 'false' is best to see results as UI/msgboxes...
+	else
+		@model.start_operation((db("Extrude Edges by Faces: Smoothing Edge ")))
+	end
+      tick=1
+      edges.each{|e|
+        e.soft=true
+        e.smooth=true
+        @msg=((db("Extrude Edges by Faces: Smoothing Edge "))+tick.to_s+(db(" of "))+edges.length.to_s)
+        Sketchup::set_status_text(@msg)
+        tick+=1
+      }
+      gpx=@model.active_entities.add_group(group)
+      group.explode
+      group=gpx
+      gents=group.entities
+      @model.commit_operation
+  end#if
+  
+#=end ### remove this leading # AND above at #=begin ~Line432 to stop extra tools running
+    Sketchup::set_status_text("")
+    ###
+    Sketchup.send_action "selectSelectionTool:"
+    ### done
+  end#make_mesh
+  
+  
+  def order_points(edges)
+    verts=[]
+	edges.each{|edge|verts<<edge.vertices}
+	verts.flatten!
+    ### Find end vertex
+	vertsShort=[]
+	vertsLong=[]
+	verts.each{|v|
+	  if vertsLong.include?(v)
+		vertsShort<<(v)
+	  else
+		vertsLong<<(v)
+	  end#if
+	}
+	if not startVert=(vertsLong-vertsShort).first
+		startVert=vertsLong.first
+		closed=true
+		startEdge=startVert.edges.first
+	else
+		closed=false
+		startEdge=(edges & startVert.edges).first
+	end
+    #Sort vertices, limited to those of edges
+	if startVert==startEdge.start
+		ordered_points=[startVert]
+		counter=0
+		while ordered_points.length < verts.length
+			edges.each{|edge|
+			  if edge.end==ordered_points.last
+				ordered_points<<edge.start
+			  elsif edge.start==ordered_points.last
+				ordered_points<<edge.end
+			  end
+			}
+			counter+=1
+			if counter > verts.length
+				ordered_points.reverse!
+				reversed=true
+			end#if
+		end#while
+	else
+		ordered_points=[startVert]
+		counter=0
+		while ordered_points.length < verts.length
+			edges.each{|edge|
+			  if edge.end==ordered_points.last
+				ordered_points<<edge.start
+			  elsif edge.start==ordered_points.last
+				ordered_points<<edge.end
+			  end
+			}
+			counter+=1
+			if counter > verts.length
+				ordered_points.reverse!
+				reversed=true
+			end
+		end
+	end
+	ordered_points.uniq!
+	ordered_points.reverse! if reversed
+    #Convert vertices to points
+	ordered_points.collect!{|x|x.position}
+	if closed
+		ordered_points<<ordered_points[0]
+	else
+		closed=true
+	end
+    return ordered_points
+  end#order_points
+  
+ 
+  def make_shell(points,points1,pointsm)
+    @shell=@ents.add_group()
+    sents=@shell.entities
+    msg=(db("Extrude Edges by Faces: "))
+    Sketchup::set_status_text(msg)
+    ###
+    ### make a cpoint profile
+    cprofile=sents.add_group()
+    cents=cprofile.entities
+    points.each{|p|cents.add_cpoint(p)}
+    trc=Geom::Transformation.new(ORIGIN-points[0])
+    cprofile.transform!(trc)
+    #@ents.add_text("p0",points[0])
+    ### make a cpoint mprofile
+    cmprofile=sents.add_group()
+    cments=cmprofile.entities
+    pointsm.each{|p|cments.add_cpoint(p)}
+    trcm=Geom::Transformation.new(ORIGIN-pointsm[0])
+    cmprofile.transform!(trcm)
+    #@ents.add_text("m0",points[0])
+    ###
+    pmsg=(db("Making Profile "))
+    ofmsg=(db(" of "))
+    fmsg=(db("Making Face "))
+    profiles=[]
+    mprofiles=[]
+	###
+	defcp=cents.parent
+	defcmp=cments.parent
+    ###
+    0.upto(points1.length-1) do |i|
+      xmsg=msg+pmsg+(i+1).to_s+ofmsg+points1.length.to_s
+      Sketchup::set_status_text(xmsg)
+      ang=0.0
+      tgp=nil
+     begin
+      #@ents.add_text("r1="+i.to_s,points1[i])
+      #tgp=cprofile.copy
+	  tgp=sents.add_instance(defcp, trc)
+	  tgp.make_unique if defcp.instances[1]
+	  ###
+      p=points1[i]
+      tr=Geom::Transformation.new(p)
+      tgp.transform!(tr)
+      tents=tgp.entities.to_a
+      tgp.explode
+      tgp=sents.add_group()
+      tents.each{|e|
+        tgp.entities.add_cpoint(e.position)
+        e.erase! if e.valid?
+      }
+      #tgpm=cmprofile.copy
+	  tgpm=sents.add_instance(defcmp, trcm)
+	  tgpm.make_unique if defcmp.instances[1]
+	  ###
+      p=points1[i]
+      tr=Geom::Transformation.new(p)
+      tgpm.transform!(tr)
+      tments=tgpm.entities.to_a
+      tgpm.explode
+      tgpm=sents.add_group()
+      tments.each{|e|
+        tgpm.entities.add_cpoint(e.position)
+        e.erase! if e.valid?
+      }
+      ###
+      profiles<<tgp
+      mprofiles<<tgpm
+     rescue
+      tgp.erase! if tgp and tgp.valid?
+      tgpm.erase! if tgpm and tgpm.valid?
+     end#begin
+    end#do
+    ###
+    cprofile.erase!
+    cmprofile.erase!
+    profiles.uniq!
+    mprofiles.uniq!
+    #################### now meld profile and melding profile ##########
+    meldedprofiles=[]#profiles[0]]### 1st is pure profile
+    plen=profiles.length-1
+    0.upto(plen) do |i|
+      prof1=profiles[i]
+      profm=mprofiles[i]
+      ents1=prof1.entities.to_a
+      entsm=profm.entities.to_a
+      prof1.explode
+      profm.explode
+      tempg=sents.add_group()
+      tents=tempg.entities
+      propn=(i.to_f)/(plen.to_f)
+      0.upto(ents1.length-1) do |j|
+        p0=ents1[j].position
+        p1=entsm[j].position
+        dis=p0.distance(p1)
+        if p0.vector_to(p1).length !=0
+          pn=p0.offset(p0.vector_to(p1),dis*propn)
+        else
+          pn=p0
+        end#if
+        tents.add_cpoint(pn)
+        ents1[j].erase! if ents1[j].valid?
+        entsm[j].erase! if entsm[j].valid?
+      end#do
+      meldedprofiles<<tempg
+    end#do
+    #meldedprofiles<<mprofiles[-1]###last is pure mprofile ?
+    #################### swap profiles around...
+    xprofiles=profiles
+    profiles=meldedprofiles
+    ####################
+    ### now use cpoints to draw mesh
+    facecount=(points.length-1)*(points1.length-2)*2
+    count=1
+    ###
+    0.upto(profiles.length-2) do |i|
+      count=count+((profiles[i].entities.length-2)*2)
+      xmsg=msg+fmsg+count.to_s+ofmsg+facecount.to_s
+      Sketchup::set_status_text(xmsg)
+      0.upto(profiles[i].entities.length-2) do |j|
+        pents=profiles[i].entities
+        begin
+          if pents[j].position == pents[j+1].position
+            ### starts at a common point
+            sents.add_face(pents[j].position ,profiles[i+1].entities[j].position,profiles[i+1].entities[j+1].position)
+          else ### NOT starts at a common point
+            if profiles[i+1].entities[j].position == profiles[i+1].entities[j+1].position
+              ### BUT it ends at one
+              sents.add_face(pents[j].position ,profiles[i+1].entities[j+1].position,pents[j+1].position)
+            else
+              ### NO common point so draw 2 triangular faces [usual case]
+              sents.add_face(pents[j].position ,profiles[i+1].entities[j].position,profiles[i+1].entities[j+1].position)
+              sents.add_face(pents[j].position ,profiles[i+1].entities[j+1].position,pents[j+1].position)
+            end#if
+          end#if
+        rescue
+          ### nothing ?
+        end
+      end#do
+    end#do
+    ### remove temp cpoints
+    profiles.each{|e|e.erase! if e.valid?}
+    xprofiles.each{|e|e.erase! if e.valid?}
+    mprofiles.each{|e|e.erase! if e.valid?}
+    ###
+    Sketchup::set_status_text("")
+  end#make_shell
+
+end#class
+
+end#module
