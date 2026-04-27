@@ -27,6 +27,10 @@ public class RTime extends RObject {
             }
             throw new RuntimeException("invalid argument type: " + arg.$class().name());
         }
+
+        public RObject now() {
+            return new RTime();
+        }
     }
     
     public RTime() {
